@@ -15,9 +15,5 @@ desktop.ini
 tmp/
 .tmp-*
 
-# CI 工作流：当前 PAT 只有 repo scope，推送含 .github/workflows/*.yml 的提交会被 GitHub 拒。
-# 文件留在本地（可手动跑同样步骤）；给 PAT 加上 workflow scope 后删掉这两行再推。
-.github/workflows/
-
 # MSYS 里偶尔冒出来的 Windows 设备名占位文件
 /CON

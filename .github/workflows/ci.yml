@@ -1,0 +1,46 @@
+# DSh Tagger CI —— 三道门禁：词表结构、类型检查、全量测试。
+# 任何一道失败即红；本地等价命令见 README「测试与静态检查」。
+name: ci
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    # 代码里有大量中文路径与 CRLF 脚本，windows-latest 与开发机一致
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: 环境信息
+        run: node -v && npm -v && git --version
+
+      - name: 词表结构自检（每行必须是 {tag, cn?, aliases?}）
+        run: node scripts/check-tags.mjs
+
+      - name: 安装静态检查工具（不写 package.json）
+        run: npm i --no-save --no-audit --no-fund typescript@5.6.3 @types/node@22
+
+      - name: 类型检查（allowJs + checkJs + noEmit）
+        run: npx tsc --noEmit -p tsconfig.json
+
+      - name: 全量测试
+        env:
+          # 真机 ComfyUI 用例靠这个变量跳过；CI 上没有 ComfyUI
+          DSH_TAGGER_NO_COMFY: "1"
+        # --test-concurrency=1：几个套件会读写同一份词表目录，并行跑会互相踩（实测偶发 1 条失败）
+        run: node --test --test-concurrency=1 tests/*.test.mjs
