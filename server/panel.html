@@ -100,7 +100,7 @@
         <img id="pose-thumb" alt="" hidden>
         <span class="pt"><b id="pose-name">还没有选姿势</b><span id="pose-meta">点这里按缩略图挑</span></span>
       </button>
-      <label>CN 强度 <input id="cnstrength" type="number" value="0.38" step="0.01" min="0" max="1.5" style="width:80px"></label>
+      <label>CN 强度 <input id="cnstrength" type="number" value="0.38" data-boost="0.45" step="0.01" min="0" max="1.5" style="width:80px"></label>
     </div>
     <select id="pose" hidden></select>
     <div class="row">
@@ -127,9 +127,14 @@
     <div class="hint" id="pose-count"></div>
   </div>
 </div>
-<!-- 依赖顺序：api（BASE + fetch）→ state（state + 表单读写）→ app（渲染 + 事件，末尾自启 boot） -->
+<!-- 依赖顺序：api（BASE + fetch）→ state（state + 表单读写）→ render（状态灯 / 结果卡 / 错误码表）
+     → settings（设置表单 / 工作流下拉 / ComfyUI 探活）→ history（轮询预览 / 参考图 / 姿势弹窗 / 参数记忆）
+     → app（只做编排：boot + 三个动作 + 事件绑定，末尾自启）。全部是普通 script，共享全局，末尾的 app.js 必须最后加载。 -->
 <script src="/public/api.js"></script>
 <script src="/public/state.js"></script>
+<script src="/public/render.js"></script>
+<script src="/public/settings.js"></script>
+<script src="/public/history.js"></script>
 <script src="/public/app.js"></script>
 </body>
 </html>

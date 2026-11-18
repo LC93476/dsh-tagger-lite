@@ -11,8 +11,14 @@
  *   2. 不猜配置：地址、key、模型全部由调用方（CLI / 环境变量）传进来，这里没有默认值。
  */
 import http from 'node:http'
+import {
+  chatCompletionsUrl,
+  createContextAdapter,
+  llmSettings,
+  modelsUrl,
+  normalizeBaseUrl,
+} from '../lib/cordis/adapter.js'
 
-const DEFAULT_LLM_TIMEOUT_MS = 120000
 const NO_LLM_HINT = '给 --base-url 与 --api-key（或设 DSH_TAGGER_BASE_URL / DSH_TAGGER_API_KEY）'
 // 这些状态码多半是「服务端不认 stream:true」，退回非流式再试一次（只退一次）。
 const RETRYABLE_STATUS = new Set([400, 404, 405, 415, 422, 501])
@@ -29,34 +35,12 @@ function msgOf(error) {
   return error instanceof Error ? error.message : String(error)
 }
 
-function clampTimeout(value) {
-  const n = Number.parseInt(String(value ?? ''), 10)
-  if (!Number.isFinite(n)) return DEFAULT_LLM_TIMEOUT_MS
-  return Math.min(600000, Math.max(1000, n))
-}
-
 function finish(kind, failure) {
   return failure === undefined ? { type: 'finish', kind } : { type: 'finish', kind, failure }
 }
 
-/** 去掉尾部斜杠；空串原样返回（调用方据此判断「没配」）。 */
-export function normalizeBaseUrl(value) {
-  return str(value).trim().replace(/\/+$/, '')
-}
-
-/** OpenAI 兼容的 chat 端点：baseUrl 已经带 /v1 就不再重复拼。 */
-export function chatCompletionsUrl(baseUrl) {
-  const base = normalizeBaseUrl(baseUrl)
-  if (base === '') return ''
-  return /\/v\d+$/.test(base) ? base + '/chat/completions' : base + '/v1/chat/completions'
-}
-
-/** GET /models 的端点，规则同上。 */
-export function modelsUrl(baseUrl) {
-  const base = normalizeBaseUrl(baseUrl)
-  if (base === '') return ''
-  return /\/v\d+$/.test(base) ? base + '/models' : base + '/v1/models'
-}
+// 端点拼接与超时收敛只有一份实现（lib/cordis/adapter.js）：这里按原名字转出，导出面不变。
+export { chatCompletionsUrl, modelsUrl, normalizeBaseUrl }
 
 /** 宿主的 messages 允许 [{type:'text',text}] 这种分段；OpenAI 兼容接口只认纯字符串。 */
 export function flattenMessages(messages) {
@@ -140,20 +124,13 @@ export function createLlmShim(options = {}) {
   function live() {
     const extra = typeof options.resolve === 'function' ? options.resolve() : undefined
     const merged = isRecord(extra) ? { ...options, ...extra } : options
-    const endpoint = chatCompletionsUrl(merged.baseUrl)
-    const apiKey = str(merged.apiKey).trim()
+    // endpoint / apiKey / provider / model / timeoutMs / configured 由适配层算，这里不重复拼。
+    const settings = llmSettings(merged)
     return {
-      endpoint,
-      modelsEndpoint: modelsUrl(merged.baseUrl),
-      apiKey,
-      provider: str(merged.provider).trim() || 'openai-compatible',
-      model: str(merged.model).trim(),
-      timeoutMs: clampTimeout(merged.timeoutMs),
-      baseUrl: normalizeBaseUrl(merged.baseUrl),
+      ...settings,
       sessionId: str(merged.sessionId).trim() || 'dsh-tagger',
       // 只有 OpenCode 系要这个头；forceSessionHeader 让测试能在本地假服务上验证它。
       sessionHeader: merged.forceSessionHeader === true || str(merged.baseUrl).includes('opencode.ai'),
-      configured: endpoint !== '' && apiKey !== '',
     }
   }
 
@@ -655,38 +632,6 @@ export function createToolsShim() {
  * @param {ContextServices} [deps]
  */
 export function createContext(deps = {}) {
-  const { llm, webServer, tools, extra } = deps
-  const services = new Map()
-  if (llm !== undefined) services.set('llm', llm)
-  if (webServer !== undefined) services.set('webServer', webServer)
-  if (tools !== undefined) services.set('tools', tools)
-  if (isRecord(extra)) {
-    for (const [key, value] of Object.entries(extra)) services.set(key, value)
-  }
-  const disposers = []
-  return {
-    kind: 'shim',
-    get(name) {
-      return services.get(name)
-    },
-    provide(name, value) {
-      services.set(name, value)
-      return value
-    },
-    effect(fn, label) {
-      const dispose = fn()
-      if (typeof dispose === 'function') disposers.push({ dispose, label: str(label) })
-      return dispose
-    },
-    async disposeAll() {
-      while (disposers.length > 0) {
-        const entry = disposers.pop()
-        try {
-          await entry.dispose()
-        } catch {
-          // 单个卸载失败不影响其它
-        }
-      }
-    },
-  }
+  // 服务表 + 反序卸载的语义与插件模式共用一份，实现在 lib/cordis/adapter.js。
+  return createContextAdapter(deps)
 }

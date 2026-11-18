@@ -353,10 +353,18 @@ function resolvePublicPath(rawUrl) {
     return { error: 'not-found' }
   }
   if (stat.isFile() !== true) return { error: 'not-found' }
-  return { file: full, type, size: stat.size }
+  return { file: full, type, size: stat.size, mtimeMs: stat.mtimeMs }
 }
 
-/** /public/* 的静态响应：no-store（改完刷新就生效），坏路径 400，找不到 404，其余方式 405。 */
+/**
+ * /public/* 的静态响应。缓存策略：no-cache + 强 ETag。
+ *
+ * 不用 no-store：面板每次刷新都重下 100KB 的 panel.css/app.js 没有必要。
+ * 不用长 max-age：改完文件要能立刻生效，开发期不能被缓存骗。
+ * 折中是 no-cache（可缓存，但每次带 If-None-Match 复验）：命中就 304，空 body；
+ * 文件变了 size/mtime 跟着变，ETag 自然失效，浏览器拿到新内容。
+ * 坏路径 400，找不到 404，其余方式 405。
+ */
 async function servePublic(req, res) {
   if (req.method !== 'GET' && req.method !== 'HEAD') {
     res.writeHead(405, { 'Content-Type': 'application/json; charset=utf-8', Allow: 'GET, HEAD' })
@@ -384,10 +392,17 @@ async function servePublic(req, res) {
     res.end(JSON.stringify({ ok: false, error: 'not-found', message: msgOfStatic(error) }))
     return
   }
+  const etag = '"' + found.size.toString(16) + '-' + Math.round(found.mtimeMs).toString(16) + '"'
+  if (str(req.headers['if-none-match']) === etag) {
+    res.writeHead(304, { ETag: etag, 'Cache-Control': 'no-cache' })
+    res.end()
+    return
+  }
   res.writeHead(200, {
     'Content-Type': found.type,
     'Content-Length': String(body.byteLength),
-    'Cache-Control': 'no-store',
+    'Cache-Control': 'no-cache',
+    ETag: etag,
   })
   res.end(req.method === 'HEAD' ? undefined : body)
 }

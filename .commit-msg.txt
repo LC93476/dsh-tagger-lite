@@ -1,0 +1,9 @@
+sync: 与私有仓 f5b0a6f 对齐（Phase 6-8 重构的公开版）
+
+- index.js 拆到 lib/cordis/；lib/comfy/ 目录化；seed 词条外置 data/tags/seed/
+- 面板拆 render/settings/history，默认值单源；静态资源 no-cache + ETag
+- npm 脚本门禁（test/typecheck/check:tags/bench）、run-tests.mjs、推送脚本合并 -RunCi
+- 测试隔离：scratch 目录 mkdtemp + after；缺真词库时 skip
+
+公开版剔除：general-nsfw 词表整份、pose-view 露骨 15 行、seed-08-adult 12 行
+门禁：check-tags 通过；tsc 0 error；235 tests / 235 pass / 0 fail（比私有仓少 3 条依赖内置露骨词表的用例）

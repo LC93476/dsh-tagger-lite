@@ -11,15 +11,21 @@
  * 无外部依赖：node:test + node:assert。
  */
 import assert from 'node:assert/strict'
+import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { test } from 'node:test'
+import { after, test } from 'node:test'
 import { createRepairer } from '../lib/repair.js'
 import { createTagIndex, suggestTags as modSuggest } from '../lib/tags.js'
 import { requireRealLibrary } from './_lib-guard.mjs'
 
 const silent = { info() {}, warn() {}, error() {} }
-const scratch = path.join(os.tmpdir(), 'dsh-prompt-forge-repair-test-' + process.pid)
+// 每个进程一份独立目录，跑完就删：不能用「前缀 + process.pid」——pid 会被系统复用，
+// 上一轮残留的索引缓存会让这一轮断言凭空失败（同 tests/tags.test.mjs 里 task-22 的修法）。
+const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-tagger-repair-test-'))
+after(() => {
+  fs.rmSync(scratch, { recursive: true, force: true })
+})
 
 // lib/tags 的 createTagIndex JSDoc 还没列 dir/logger（task-19 的活），这里局部收口
 const tags = createTagIndex(/** @type {any} */ ({ dir: scratch, logger: silent }))

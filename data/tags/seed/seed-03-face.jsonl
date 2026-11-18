@@ -1,0 +1,48 @@
+{"tag":"hat","cn":"帽子","postCount":300000,"kind":"general"}
+{"tag":"witch_hat","cn":"女巫帽","postCount":60000,"kind":"general"}
+{"tag":"beret","cn":"贝雷帽","postCount":60000,"kind":"general"}
+{"tag":"glasses","cn":"眼镜","postCount":300000,"kind":"general"}
+{"tag":"sunglasses","cn":"墨镜","postCount":50000,"kind":"general","aliases":["太阳镜"]}
+{"tag":"earrings","cn":"耳环","postCount":200000,"kind":"general"}
+{"tag":"necklace","cn":"项链","postCount":150000,"kind":"general"}
+{"tag":"choker","cn":"颈圈","postCount":100000,"kind":"general","aliases":["项圈"]}
+{"tag":"blue_eyes","cn":"蓝眼","postCount":1600000,"kind":"general","aliases":["blue eyes"]}
+{"tag":"red_eyes","cn":"红眼","postCount":1400000,"kind":"general","aliases":["red eyes"]}
+{"tag":"green_eyes","cn":"绿眼","postCount":700000,"kind":"general"}
+{"tag":"brown_eyes","cn":"棕眼","postCount":600000,"kind":"general"}
+{"tag":"yellow_eyes","cn":"黄眼","postCount":500000,"kind":"general","aliases":["gold eyes"]}
+{"tag":"purple_eyes","cn":"紫眼","postCount":400000,"kind":"general"}
+{"tag":"grey_eyes","cn":"灰眼","postCount":200000,"kind":"general","aliases":["gray eyes"]}
+{"tag":"heterochromia","cn":"异色瞳","postCount":70000,"kind":"general","aliases":["异色眼"]}
+{"tag":"eyelashes","cn":"睫毛","postCount":200000,"kind":"general"}
+{"tag":"makeup","cn":"化妆","postCount":80000,"kind":"general"}
+{"tag":"lipstick","cn":"口红","postCount":60000,"kind":"general"}
+{"tag":"freckles","cn":"雀斑","postCount":40000,"kind":"general"}
+{"tag":"mole_under_eye","cn":"眼下痣","postCount":30000,"kind":"general","aliases":["泪痣"]}
+{"tag":"fang","cn":"虎牙","postCount":80000,"kind":"general"}
+{"tag":"pointy_ears","cn":"尖耳","postCount":60000,"kind":"general","aliases":["精灵耳"]}
+{"tag":"animal_ears","cn":"兽耳","postCount":200000,"kind":"general"}
+{"tag":"cat_ears","cn":"猫耳","postCount":150000,"kind":"general"}
+{"tag":"fox_ears","cn":"狐耳","postCount":40000,"kind":"general"}
+{"tag":"rabbit_ears","cn":"兔耳","postCount":60000,"kind":"general"}
+{"tag":"dog_ears","cn":"狗耳","postCount":40000,"kind":"general"}
+{"tag":"horns","cn":"角","postCount":120000,"kind":"general","aliases":["犄角"]}
+{"tag":"tail","cn":"尾巴","postCount":150000,"kind":"general"}
+{"tag":"cat_tail","cn":"猫尾","postCount":60000,"kind":"general"}
+{"tag":"angel_wings","cn":"天使翅膀","postCount":40000,"kind":"general"}
+{"tag":"demon_wings","cn":"恶魔翅膀","postCount":30000,"kind":"general"}
+{"tag":"smile","cn":"微笑","postCount":4120285,"kind":"general","aliases":["smiling","笑容","笑颜"]}
+{"tag":"blush","cn":"脸红","postCount":4054569,"kind":"general","aliases":["害羞"]}
+{"tag":"open_mouth","cn":"张嘴","postCount":1500000,"kind":"general","aliases":["开口"]}
+{"tag":"closed_mouth","cn":"闭嘴","postCount":800000,"kind":"general"}
+{"tag":"closed_eyes","cn":"闭眼","postCount":700000,"kind":"general"}
+{"tag":"one_eye_closed","cn":"单眼闭","postCount":300000,"kind":"general","aliases":["眨眼"]}
+{"tag":"parted_lips","cn":"微张嘴唇","postCount":500000,"kind":"general"}
+{"tag":"frown","cn":"皱眉","postCount":200000,"kind":"general"}
+{"tag":"angry","cn":"生气","postCount":400000,"kind":"general","aliases":["愤怒"]}
+{"tag":"sad","cn":"悲伤","postCount":250000,"kind":"general","aliases":["难过"]}
+{"tag":"crying","cn":"哭泣","postCount":300000,"kind":"general","aliases":["哭"]}
+{"tag":"tears","cn":"眼泪","postCount":300000,"kind":"general","aliases":["泪"]}
+{"tag":"sweat","cn":"汗","postCount":250000,"kind":"general"}
+{"tag":"sweatdrop","cn":"汗滴","postCount":200000,"kind":"general"}
+{"tag":"heart","cn":"心形","postCount":200000,"kind":"general","aliases":["爱心"]}

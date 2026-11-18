@@ -1,0 +1,27 @@
+{"tag":"worst_quality","cn":"最差质量","postCount":500000,"kind":"general"}
+{"tag":"low_quality","cn":"低质量","postCount":400000,"kind":"general"}
+{"tag":"lowres","cn":"低分辨率","postCount":400000,"kind":"general"}
+{"tag":"jpeg_artifacts","cn":"JPEG压缩痕迹","postCount":100000,"kind":"general","aliases":["jpeg artifact"]}
+{"tag":"blurry","cn":"模糊","postCount":200000,"kind":"general"}
+{"tag":"bad_anatomy","cn":"解剖错误","postCount":300000,"kind":"general","aliases":["结构错误"]}
+{"tag":"bad_hands","cn":"手部崩坏","postCount":200000,"kind":"general","aliases":["手崩"]}
+{"tag":"bad_proportions","cn":"比例失调","postCount":150000,"kind":"general"}
+{"tag":"extra_digits","cn":"多余手指","postCount":150000,"kind":"general","aliases":["多指"]}
+{"tag":"fewer_digits","cn":"手指缺失","postCount":100000,"kind":"general","aliases":["少指"]}
+{"tag":"missing_fingers","cn":"缺手指","postCount":80000,"kind":"general"}
+{"tag":"extra_limbs","cn":"多余肢体","postCount":60000,"kind":"general"}
+{"tag":"bad_feet","cn":"脚部崩坏","postCount":100000,"kind":"general","aliases":["脚崩"]}
+{"tag":"text","cn":"文字","postCount":300000,"kind":"general"}
+{"tag":"watermark","cn":"水印","postCount":200000,"kind":"general"}
+{"tag":"signature","cn":"签名","postCount":300000,"kind":"general"}
+{"tag":"username","cn":"用户名","postCount":200000,"kind":"general"}
+{"tag":"logo","cn":"标志","postCount":100000,"kind":"general"}
+{"tag":"english_text","cn":"英文文字","postCount":150000,"kind":"general"}
+{"tag":"chinese_text","cn":"中文文字","postCount":80000,"kind":"general"}
+{"tag":"speech_bubble","cn":"对话框","postCount":200000,"kind":"general","aliases":["气泡框"]}
+{"tag":"border","cn":"边框","postCount":200000,"kind":"general"}
+{"tag":"frame","cn":"画框","postCount":50000,"kind":"general"}
+{"tag":"censored","cn":"打码","postCount":100000,"kind":"general"}
+{"tag":"bar_censor","cn":"横条打码","postCount":60000,"kind":"general"}
+{"tag":"mosaic_censoring","cn":"马赛克","postCount":80000,"kind":"general","aliases":["马赛克打码"]}
+{"tag":"uncensored","cn":"无码","postCount":200000,"kind":"general","aliases":["未打码"]}

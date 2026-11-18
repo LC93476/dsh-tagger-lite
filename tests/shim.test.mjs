@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import http from 'node:http'
 import { createLlmShim } from '../server/shims.mjs'
+import { apiUrl, chatCompletionsUrl, createContextAdapter, createLogger, llmSettings, modelsUrl } from '../lib/cordis/adapter.js'
 
 /** @param {import('node:net').Server} server @returns {number} */
 function portOf(server) {
@@ -67,3 +68,52 @@ test('shim：timeoutMs / model / baseUrl 都现读 resolve，面板改完立刻�
   assert.equal(shim.describe().model, 'm-b')
   assert.equal(shim.ready, true)
 })
+
+test('adapter：apiUrl 认得已有的 /vN，两种端点只写一遍规则', () => {
+  assert.equal(chatCompletionsUrl('http://h/v1'), 'http://h/v1/chat/completions')
+  assert.equal(chatCompletionsUrl('http://h/'), 'http://h/v1/chat/completions')
+  assert.equal(modelsUrl('http://h/v2'), 'http://h/v2/models')
+  assert.equal(apiUrl('', '/models'), '')
+})
+
+test('adapter：llmSettings 不给默认地址、没有 apiKey 就是未配置，超时被钳制', () => {
+  const empty = llmSettings()
+  assert.equal(empty.endpoint, '')
+  assert.equal(empty.configured, false)
+  assert.equal(empty.provider, 'openai-compatible')
+
+  const low = llmSettings({ baseUrl: 'http://h/', apiKey: ' sk-1 ', timeoutMs: 10 })
+  assert.equal(low.baseUrl, 'http://h')
+  assert.equal(low.apiKey, 'sk-1')
+  assert.equal(low.timeoutMs, 1000)
+  assert.equal(low.configured, true)
+  assert.equal(llmSettings({ baseUrl: 'http://h', apiKey: 'k', timeoutMs: 999999 }).timeoutMs, 600000)
+  assert.equal(llmSettings({ baseUrl: 'http://h' }).configured, false)
+})
+
+test('adapter：createContextAdapter 的 get / provide / effect 反序卸载，kind 可指定', async () => {
+  const order = []
+  const ctx = createContextAdapter({ llm: { tag: 'L' }, extra: { comfy: { tag: 'C' } } })
+  assert.equal(ctx.kind, 'shim')
+  assert.deepEqual(ctx.get('llm'), { tag: 'L' })
+  assert.deepEqual(ctx.get('comfy'), { tag: 'C' })
+  assert.equal(ctx.get('missing'), undefined)
+  assert.deepEqual(ctx.provide('ws', 1), 1)
+  assert.equal(ctx.get('ws'), 1)
+  ctx.effect(() => () => order.push('first'))
+  ctx.effect(() => () => order.push('second'))
+  ctx.effect(() => undefined)
+  await ctx.disposeAll()
+  assert.deepEqual(order, ['second', 'first'])
+  assert.equal(createContextAdapter({ kind: 'cordis' }).kind, 'cordis')
+})
+
+test('adapter：createLogger 走调用方的 write，前缀由它拼', () => {
+  const lines = []
+  const log = createLogger({ prefix: '[t] ', write: (level, line) => lines.push(level + ' ' + line) })
+  log.info('a', 1)
+  log.warn({ x: 2 })
+  log.error('boom')
+  assert.deepEqual(lines, ['info [t] a 1', 'warn [t] {"x":2}', 'error [t] boom'])
+})
+

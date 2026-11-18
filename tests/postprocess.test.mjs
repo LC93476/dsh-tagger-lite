@@ -11,9 +11,10 @@
  * 无外部依赖：node:test + node:assert + 真库索引。
  */
 import assert from 'node:assert/strict'
+import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { test } from 'node:test'
+import { after, test } from 'node:test'
 import { createTagIndex } from '../lib/tags.js'
 import { requireRealLibrary } from './_lib-guard.mjs'
 import {
@@ -38,7 +39,12 @@ import * as ppNamespace from '../lib/postprocess.js'
 import * as rulesNamespace from '../lib/postprocess/rules.js'
 
 const silent = { info() {}, warn() {}, error() {}, debug() {} }
-const scratch = path.join(os.tmpdir(), 'dsh-prompt-postprocess-test-' + process.pid)
+// 每个进程一份独立目录，跑完就删：不能用「前缀 + process.pid」——pid 会被系统复用，
+// 上一轮残留的索引缓存会让这一轮断言凭空失败（同 tests/tags.test.mjs 里 task-22 的修法）。
+const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-tagger-postprocess-test-'))
+after(() => {
+  fs.rmSync(scratch, { recursive: true, force: true })
+})
 // lib/tags 的 createTagIndex JSDoc 还没列 dir/logger（task-19 的活），这里局部收口
 const live = createTagIndex(/** @type {any} */ ({ dir: scratch, logger: silent }))
 const pp = createPostProcessor({})

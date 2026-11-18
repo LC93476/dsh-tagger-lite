@@ -34,8 +34,13 @@
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
 | GET/HEAD | `/`、`/panel`、`/panel.html` | 面板 HTML（骨架，引用下面的 CSS/JS） |
-| GET/HEAD | `/public/panel.css`、`/public/api.js`、`/public/state.js`、`/public/app.js` | 面板静态资源，`Cache-Control: no-store` |
-| GET/HEAD | `/about` | 信息页（健康状态 / 数据目录 / 接口清单） |
+| GET/HEAD | `/public/panel.css`、`/public/api.js`、`/public/state.js`、`/public/app.js`（Phase 7 后还有 `render.js` `settings.js` `history.js`） | 面板静态资源，`Cache-Control: no-cache` + 强 ETag，可 304 |
+| GET/HEAD | `/about` | 信息页（健康状态 / 数据目录 / 接口清单），`no-store` |
+
+`/public/*` 的缓存策略：**`no-cache` + 强 ETag**（`"<size 十六进制>-<mtimeMs 十六进制>"`）。
+浏览器可以留副本，但每次刷新都带 `If-None-Match` 复验：没改 → `304` 空 body；改了（size 或 mtime 变）→
+ETag 失效，拿到新内容。既不会每次重下 100KB，也不会被缓存骗着看到旧面板。
+HTML 页面、接口 JSON、`/_mod/*` 子模块仍是 `no-store`。
 
 `/public` 只收白名单扩展名（`.css .js .json .svg .png .jpg .jpeg .webp`），带 `..` 或解析后跑到
 `server/public/` 之外的路径一律 `400 {"ok":false,"error":"bad-path"}`（挡路径穿越）。

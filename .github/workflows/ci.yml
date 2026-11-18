@@ -29,18 +29,18 @@ jobs:
       - name: 环境信息
         run: node -v && npm -v && git --version
 
-      - name: 词表结构自检（每行必须是 {tag, cn?, aliases?}）
-        run: node scripts/check-tags.mjs
+      - name: 装依赖（只有 typescript / @types/node 两个 devDependency）
+        run: npm install --no-audit --no-fund
 
-      - name: 安装静态检查工具（不写 package.json）
-        run: npm i --no-save --no-audit --no-fund typescript@5.6.3 @types/node@22
+      - name: 词表结构自检（npm run check:tags）
+        run: npm run check:tags
 
-      - name: 类型检查（allowJs + checkJs + noEmit）
-        run: npx tsc --noEmit -p tsconfig.json
+      - name: 类型检查（npm run typecheck）
+        run: npm run typecheck
 
       - name: 全量测试
         env:
           # 真机 ComfyUI 用例靠这个变量跳过；CI 上没有 ComfyUI
           DSH_TAGGER_NO_COMFY: "1"
-        # --test-concurrency=1：几个套件会读写同一份词表目录，并行跑会互相踩（实测偶发 1 条失败）
-        run: node --test --test-concurrency=1 tests/*.test.mjs
+        # npm test = scripts/run-tests.mjs：串行跑（几个套件会读写同一份词表目录，并行会互相踩）
+        run: npm test

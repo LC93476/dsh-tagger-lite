@@ -14,9 +14,11 @@ import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
 import http from 'node:http'
 import { mkdtemp, rm } from 'node:fs/promises'
+import { statSync, utimesSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { DEFAULTS } from '../lib/config.js'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const entry = path.join(here, '..', 'server', 'standalone.mjs')
@@ -167,36 +169,127 @@ test('standalone：health / spi / spi.version / 根路径 HTML 都能对外提�
     assert.ok(panel.includes('/public/app.js'), '骨架要引用拆出去的脚本')
     assert.ok(Buffer.byteLength(panel) < 10240, 'panel.html 只留骨架，必须小于 10KB')
 
-    // 拆出去的静态资源：200 + 正确 MIME + no-store + 原来的内容真的搬过去了
+    // 拆出去的静态资源：200 + 正确 MIME + no-cache + 强 ETag（内容确实搬过去了）
     const cssRes = await fetch(url + '/public/panel.css')
     assert.equal(cssRes.status, 200)
     assert.match(cssRes.headers.get('content-type') ?? '', /text\/css/)
-    assert.equal(cssRes.headers.get('cache-control'), 'no-store')
+    assert.equal(cssRes.headers.get('cache-control'), 'no-cache', '静态资源要可协商缓存，不能 no-store')
+    const cssEtag = String(cssRes.headers.get('etag'))
+    assert.match(cssEtag, /^"[0-9a-f]+-[0-9a-f]+"$/, 'ETag 要是 size-mtime 的强校验值')
     assert.ok((await cssRes.text()).includes('--brand'), '样式表要有主题变量')
 
-    const appRes = await fetch(url + '/public/app.js')
-    assert.equal(appRes.status, 200)
-    assert.match(appRes.headers.get('content-type') ?? '', /javascript/)
-    const appJs = await appRes.text()
-    assert.ok(appJs.includes('doRefine'), '精修逻辑要在 app.js 里')
-    assert.ok(appJs.includes('renderResult'), '渲染逻辑要在 app.js 里')
-    // 服务端错误码要折成人话，别把 bad-type / no-launch-dir 这种码直接甩给用户
-    assert.ok(appJs.includes('ERR_TEXT'), 'app.js 要有错误码中文表')
-    assert.ok(appJs.includes('只收 png / jpg / webp 图片'), 'bad-type 要有中文说明')
-    assert.ok(appJs.includes('先在设置里填 ComfyUI 的安装目录'), 'no-launch-dir 要有中文说明')
+    // 带 If-None-Match 再来一次：304 + 空 body，仍然带 ETag / no-cache（否则浏览器下回又整份重下）
+    const revalidated = await fetch(url + '/public/panel.css', { headers: { 'if-none-match': cssEtag } })
+    assert.equal(revalidated.status, 304)
+    assert.equal(await revalidated.text(), '')
+    assert.equal(revalidated.headers.get('etag'), cssEtag, '304 也要回 ETag')
+    assert.equal(revalidated.headers.get('cache-control'), 'no-cache')
+
+    // 文件动了（哪怕只是 mtime），ETag 必须跟着变，否则用户改完刷新还是旧脚本
+    const cssFile = path.join(here, '..', 'server', 'public', 'panel.css')
+    const cssStat = statSync(cssFile)
+    utimesSync(cssFile, cssStat.atime, new Date(cssStat.mtimeMs + 2000))
+    const touched = await fetch(url + '/public/panel.css')
+    assert.equal(touched.status, 200)
+    assert.notEqual(touched.headers.get('etag'), cssEtag, 'mtime 变了 ETag 要变')
+    utimesSync(cssFile, cssStat.atime, cssStat.mtime)
+
+    // 反例：HTML 页面与接口数据仍是不许缓存的（别把上面那条顺手改成全局 no-cache）
+    assert.equal(rootRes.headers.get('cache-control'), 'no-store', 'HTML 页面必须 no-store')
+    const apiRes = await fetch(url + '/tagger/api/health')
+    assert.equal(apiRes.headers.get('cache-control'), 'no-store', '接口数据必须 no-store')
+
+    // 面板脚本按职责拆成四个文件，逐文件读回来再断言（原来都塞在 app.js 里）
+    const publicFiles = ['/public/api.js', '/public/state.js', '/public/render.js', '/public/settings.js', '/public/history.js', '/public/app.js']
+    /** @type {Record<string, string>} */
+    const src = {}
+    for (const p of publicFiles) {
+      const res = await fetch(url + p)
+      assert.equal(res.status, 200, p + ' 要能取到')
+      assert.match(res.headers.get('content-type') ?? '', /javascript/, p + ' 要按 JS 提供')
+      src[p] = await res.text()
+    }
+    const appJs = src['/public/app.js']
+    const renderJs = src['/public/render.js']
+    const settingsJs = src['/public/settings.js']
+    const historyJs = src['/public/history.js']
+    const stateJs = src['/public/state.js']
+    const apiJs = src['/public/api.js']
+
+    // app.js 只做编排：三个动作 + boot，渲染/设置/预览都各自成文件
+    assert.ok(appJs.includes('doRefine'), '精修动作留在 app.js')
+    assert.ok(appJs.includes('doForge') && appJs.includes('doRun'), '三个动作都在 app.js')
+    assert.ok(appJs.includes('bootInner'), 'boot 编排在 app.js')
+    assert.ok(appJs.includes('loadUi()'), 'boot 要把上次的参数读回来')
     // boot 只该打 /state 一个状态接口，不再分别打 /workflows、/config、/comfy
     assert.ok(appJs.includes('api("/state")'), 'boot 要打 /state')
-    // 桌面版的参数记忆：关掉浏览器再回来，宽高/种子/工作流还在
-    assert.ok(appJs.includes('localStorage.setItem(LS_KEY'), '要记住出图参数')
-    assert.ok(appJs.includes('function loadUi'), '启动时要把上次的参数读回来')
-    // boot 里必须真的调一次，否则刷新后参数又回默认值（曾经就是漏了这一行）
-    assert.ok(appJs.split('loadUi()').length - 1 >= 2, 'boot 要调用 loadUi()')
     // /comfy 只有用户点「探活」时才打，可以留；/workflows 完全该由 /state 提供，不许再有
-    assert.ok(appJs.includes('api("/workflows")') === false, '/workflows 该由 /state 一起给，不许再单独打')
+    for (const p of publicFiles) {
+      assert.equal(src[p].includes('api("/workflows")'), false, p + ' 不许再单独打 /workflows')
+    }
+    // boot 里必须真的调一次 loadUi，reloadState 里也要有（曾经就是漏了 boot 那一行）
+    const loadUiCalls = (appJs + settingsJs + historyJs).split('loadUi()').length - 1
+    assert.ok(loadUiCalls >= 2, 'boot 与 reloadState 都要调用 loadUi()')
 
-    const apiJs = await (await fetch(url + '/public/api.js')).text()
+    // 渲染层：结果卡 + 状态灯 + 错误码中文表（别把 bad-type / no-launch-dir 直接甩给用户）
+    assert.ok(renderJs.includes('renderResult'), 'renderResult 在 render.js')
+    assert.ok(renderJs.includes('setLamp'), '状态灯在 render.js')
+    assert.ok(renderJs.includes('ERR_TEXT'), 'render.js 要有错误码中文表')
+    assert.ok(renderJs.includes('只收 png / jpg / webp 图片'), 'bad-type 要有中文说明')
+    assert.ok(renderJs.includes('先在设置里填 ComfyUI 的安装目录'), 'no-launch-dir 要有中文说明')
+
+    // 设置层：/state 之后回填表单，工作流换成 CN 强度联动
+    assert.ok(settingsJs.includes('api("/state")'), 'reloadState 在 settings.js')
+    assert.ok(settingsJs.includes('fillWorkflows') && settingsJs.includes('applyCnStrength'), '工作流与 CN 强度在 settings.js')
+
+    // 历史/预览层：参数记忆与轮询
+    assert.ok(historyJs.includes('localStorage.setItem(LS_KEY'), '要记住出图参数')
+    assert.ok(historyJs.includes('function loadUi'), '启动时要把上次的参数读回来')
+    assert.ok(historyJs.includes('pollJob'), '出图轮询在 history.js')
+
+    // 表单层：state.js 只读 DOM 默认值，不再自己抄一份 1200/1800/30；配置默认值走 applyUiDefaults
+    assert.ok(stateJs.includes('positiveText'), 'state.js 要带表单读写')
+    assert.ok(stateJs.includes('applyUiDefaults'), '配置里的默认值要用 applyUiDefaults 回填')
+    assert.ok(stateJs.includes('fieldNum') && stateJs.includes('defaultValue'), '空输入要回落到 defaultValue 与 DEFAULT_VARS')
+
+    // 出图变量的兜底只允许有一处：state.js 的 DEFAULT_VARS 单张常量表（别处不许再抄 1200/1800/30）
+    const table = /var DEFAULT_VARS = \{([^}]*)\}/.exec(stateJs)
+    assert.ok(table !== null, 'state.js 要有唯一的 DEFAULT_VARS 常量表')
+    /** @type {Record<string, string>} */
+    const fallback = {}
+    for (const hit of table[1].matchAll(/([a-zA-Z]+)\s*:\s*([0-9.]+)/g)) fallback[hit[1]] = hit[2]
+    assert.deepEqual(Object.keys(fallback).sort(), ['cfg', 'height', 'seed', 'steps', 'width'], '兜底表要覆盖全部出图变量')
+    // 表里的值必须与 panel.html 上同名 input 的 value 一致（HTML 是 defaultValue，两边漂移会互相打脸）
+    for (const key of Object.keys(fallback)) {
+      const htmlVal = new RegExp('id="' + key + '"[^>]*value="([^"]+)"').exec(panel)
+      assert.ok(htmlVal !== null, 'panel.html 的 ' + key + ' 要有 value')
+      assert.equal(Number(htmlVal[1]), Number(fallback[key]), 'panel.html 与 DEFAULT_VARS 的 ' + key + ' 必须一致')
+    }
+    // 除了这张表，任何 public 脚本里都不许再出现这几个字面量默认值
+    for (const literal of ['1200', '1800', '20261108', '5.03']) {
+      const owners = publicFiles.filter(p => src[p].includes(literal))
+      assert.deepEqual(owners, ['/public/state.js'], literal + ' 只许出现在 state.js 的 DEFAULT_VARS 里，实际：' + owners.join(', '))
+    }
+
+    // DEFAULT_VARS 与 lib/config.js 的 DEFAULTS 同源：有配置的字段一律不在这里另立一份，靠注释锚点对齐键名
+    assert.ok(stateJs.includes('DEFAULTS-SOURCE: lib/config.js DEFAULTS'), 'state.js 要标注兜底的来源')
+    const pick = (obj, dotted) => dotted.split('.').reduce((o, k) => (o === null || o === undefined ? undefined : o[k]), obj)
+    for (const key of ['tags.maxTags', 'refine.mode', 'purge.level', 'comfy.baseUrl']) {
+      assert.notEqual(pick(DEFAULTS, key), undefined, 'lib/config.js DEFAULTS 里要有 ' + key)
+      assert.ok(stateJs.includes(key), '锚点要把 ' + key + ' 记为「以 config 为准」')
+    }
+    // 这几个键不许被抄成前端常量：值只能来自 /state 的 config（maxTags 走 applyUiDefaults，档位走 setLamp）
+    assert.equal(/maxTags\s*:\s*40/.test(stateJs), false, 'maxTags 的 40 只能来自 DEFAULTS / config')
+    assert.equal(/mode\s*:\s*["']add["']/.test(stateJs), false, 'refine.mode 只能来自 DEFAULTS / config')
+
     assert.ok(apiJs.includes('"/tagger/api"'), '面板要打到自己这个前缀上')
-    assert.ok((await (await fetch(url + '/public/state.js')).text()).includes('positiveText'), 'state.js 要带表单读写')
+
+    // 面板骨架必须按依赖顺序加载：api → state → render/settings/history → app（app.js 最后）
+    const order = ['/public/api.js', '/public/state.js', '/public/render.js', '/public/settings.js', '/public/history.js', '/public/app.js'].map(p => panel.indexOf(p))
+    for (let i = 1; i < order.length; i++) {
+      assert.ok(order[i - 1] >= 0 && order[i - 1] < order[i], 'panel.html 里脚本顺序必须是 api → state → render/settings/history → app')
+    }
+    assert.ok(panel.lastIndexOf('<script') === panel.lastIndexOf('/public/app.js') - '<script src="'.length, 'app.js 必须是最后一个脚本')
 
     // 路径穿越：/public 下只放行普通文件，任何 '..' 都必须被挡（400 / 404 都算挡住）
     const port = new URL(url).port

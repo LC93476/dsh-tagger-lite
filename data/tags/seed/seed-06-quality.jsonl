@@ -1,0 +1,21 @@
+{"tag":"motion_blur","cn":"动态模糊","postCount":40000,"kind":"general"}
+{"tag":"chromatic_aberration","cn":"色差","postCount":20000,"kind":"general"}
+{"tag":"film_grain","cn":"胶片颗粒","postCount":30000,"kind":"general"}
+{"tag":"vignetting","cn":"暗角","postCount":20000,"kind":"general"}
+{"tag":"monochrome","cn":"单色","postCount":150000,"kind":"general"}
+{"tag":"greyscale","cn":"灰度","postCount":100000,"kind":"general","aliases":["grayscale"]}
+{"tag":"sepia","cn":"怀旧色","postCount":20000,"kind":"general"}
+{"tag":"high_contrast","cn":"高对比","postCount":40000,"kind":"general"}
+{"tag":"pastel_colors","cn":"粉彩色","postCount":60000,"kind":"general"}
+{"tag":"vibrant_colors","cn":"鲜艳色彩","postCount":60000,"kind":"general"}
+{"tag":"watercolor_(medium)","cn":"水彩","postCount":50000,"kind":"general","aliases":["watercolor","水彩画"]}
+{"tag":"oil_painting_(medium)","cn":"油画","postCount":30000,"kind":"general","aliases":["oil painting"]}
+{"tag":"sketch","cn":"草稿","postCount":80000,"kind":"general","aliases":["素描"]}
+{"tag":"lineart","cn":"线稿","postCount":200000,"kind":"general","aliases":["线画"]}
+{"tag":"3d","cn":"3D","postCount":50000,"kind":"general","aliases":["三维"]}
+{"tag":"photorealistic","cn":"照片级写实","postCount":60000,"kind":"general","aliases":["照片写实"]}
+{"tag":"chibi","cn":"二头身","postCount":150000,"kind":"general","aliases":["q版"]}
+{"tag":"realistic","cn":"写实","postCount":100000,"kind":"general"}
+{"tag":"best_quality","cn":"最佳质量","postCount":300000,"kind":"general"}
+{"tag":"good_quality","cn":"高质量","postCount":200000,"kind":"general"}
+{"tag":"normal_quality","cn":"普通质量","postCount":100000,"kind":"general"}

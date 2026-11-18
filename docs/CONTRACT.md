@@ -13,7 +13,11 @@ HTTP/MCP 的逐条参数与示例不在这里，看 [`API.md`](./API.md)。
 
 | 路径 | 职责 |
 | --- | --- |
-| `index.js` | 宿主入口：`name` / `inject` / `apply(ctx, config)`；装配 runtime、注册 HTTP 前缀（新 `/tagger/api` + 旧 `/prompt-forge/api`）、注册 MCP 工具 |
+| `index.js` | 宿主入口（Phase 6.1 后只剩编排，112 行）：五个命名导出 `name` / `inject` / `createRuntime` / `createHandlers` / `apply`；装配 runtime、注册 HTTP 前缀（新 `/tagger/api` + 旧 `/prompt-forge/api`）、注册 MCP 工具 |
+| `lib/cordis/adapter.js` | 宿主适配层：`createLogger` / `normalizeBaseUrl` / `apiUrl` / `chatCompletionsUrl` / `modelsUrl` / `clampTimeout` / `llmSettings` / `createContextAdapter`（`server/shims.mjs` 与 `index.js` 共用，端点拼接只此一处） |
+| `lib/cordis/config.js` | `PLUGIN` / `VERSION` / `configView(rt)`（apiKey 只回 `apiKeySet` + `apiKeyHint`）/ `persistPatch(rt, patch)` |
+| `lib/cordis/commands.js` | 模型工具注册 `registerTools(ctx, rt)` + 系统提示词注入 `registerSystemPromptSection(ctx, rt)`（受 `purge.injectIntoAgentPrompt` 控制） |
+| `lib/cordis/handlers.js` | `createHandlers(rt)`：26 条 HTTP 路由（`/forge` `/refine` `/run` `/job` `/upload` `/pose-thumb` `/spi` `/config` `/purge` `/state` `/health` `/mcp` 等） |
 | `client.js` | 浏览器端面板门面（`window.__ModuleLoader__.load` 工厂），侧边栏图标 + better-sidebar 页签；实现拆在 `client/` 下 |
 | `lib/tags.js` | 标签索引**统一入口**（转发层）；实现拆在 `lib/tags/`：`text.js` 纯归一、`loader.js` 读盘/overlay/建索引、`matcher.js` 检索与 canonicalize、`index.js` 懒加载与单例 |
 | `lib/forge.js` | 锻造器：白话 → 调 LLM → 解析 JSON → 词形修复 → 姿势补词 → 去重合序 → 标签串 |
@@ -22,9 +26,12 @@ HTTP/MCP 的逐条参数与示例不在这里，看 [`API.md`](./API.md)。
 | `lib/zh-intent.js` | 中文姿势/视角意图表（`POSE_HINTS`）与候选注入（`selectCandidates`） |
 | `lib/refine.js` | 二次精修门面：在已有标签串上做增量增删/调权，**不重跑整串**；实现拆在 `lib/refine/`（`consts` / `diff` / `prompt` / `apply` / `index`） |
 | `lib/purge.js` | 破甲系统提示词（档位 `off` / `light` / `standard` / `full` / `max`） |
-| `lib/comfy.js` | ComfyUI 客户端：模板 → 变量注入 → `POST /prompt` → 轮询 `/history` → 取图/上传参考图 |
+| `lib/comfy.js` | ComfyUI 客户端**兼容门面**（`export * from './comfy/index.js'`），旧 import 路径不变 |
+| `lib/comfy/index.js` | 编排 + HTTP：`ping` / `listWorkflows` / `submit` / `status` / `waitFor` / `image` |
+| `lib/comfy/workflow.js` | 纯函数层：API/UI 格式判定、正负向节点映射、`vars`→节点输入、schema→变量面、history→状态摘要 |
+| `lib/comfy/upload.js` | 参考图落到 ComfyUI 的 `input/`（扩展名白名单、24MB 上限、`tagger_ref_<8hex>_<name>` 命名） |
+| `lib/comfy-workflow.js` | 旧路径门面（指向 `lib/comfy/workflow.js`，文档与外部代码仍可用这个名） |
 | `lib/backend-common.js` | 后端公共层：HTTP 封装、超时、错误码归一、轮询等待（comfy / forge 共用） |
-| `lib/comfy-workflow.js` | 工作流模板解析、变量映射、历史摘要（纯函数，无 IO，comfy.js 调用它） |
 | `lib/mcp.js` | MCP 服务端（JSON-RPC over HTTP），供外部 MCP 客户端调用 |
 | `lib/spi.js` | 扩展注册表（槽位 + 钩子） |
 | `lib/routes.js` | 路由表与 dispatch（前缀可换，支持旧前缀共存） |
@@ -32,7 +39,12 @@ HTTP/MCP 的逐条参数与示例不在这里，看 [`API.md`](./API.md)。
 | `lib/poses.js` | 姿势目录与缩略图查找（`createPoseCatalog` / `poseImage`） |
 | `server/standalone.mjs` | 脱离 DSH 的独立 HTTP 服务（web 版入口） |
 | `server/shims.mjs` | 独立模式的最小 ctx（llm / webServer / tools 三个 shim） |
-| `server/public/` | Web 面板静态资源（`panel.css` / `api.js` / `state.js` / `app.js`），由独立服务的 `/public` 前缀提供，白名单扩展名 + 防穿越 |
+| `server/public/` | Web 面板静态资源，由独立服务的 `/public` 前缀提供（白名单扩展名 + 三重防穿越 + `no-cache`/ETag）：`panel.css` / `api.js` / `state.js` / `render.js`（灯 / 结果卡 / 错误码表）/ `settings.js`（LLM 与 ComfyUI 设置、工作流下拉、参考图行）/ `history.js`（历史、姿势弹窗、出图轮询、`localStorage` 参数记忆）/ `app.js`（只管 boot 与事件绑定） |
+| `lib/seed-tags.js` | 内置 seed 词条的薄入口（`SEED_TAGS = loadSeedRows()`）；词条本体在 `data/tags/seed/seed-01..13-*.jsonl` |
+| `scripts/run-tests.mjs` | `npm test` 的入口：按 Node 版本决定加不加 `--test-concurrency=1`（<20.11 没有该参数） |
+| `scripts/check-tags.mjs` | 词表结构自检（`npm run check:tags`） |
+| `scripts/bench.mjs` | 本地计算层基准（`npm run bench`，超预算 exit 1，数字见 `docs/PERF.md`） |
+| `scripts/push-to-github.ps1` | 唯一的推送脚本（`-User -Repo -Private -UseSsh -RunCi -Both -LiteDir`）；原来的 `push-ci.ps1` 已并入 `-RunCi` |
 | `scripts/win/` | Windows 启停脚本（根目录的 `.cmd` / `.vbs` 只是转发入口） |
 | `data/tags/*.jsonl` | 随包词表补丁（overlay）；用户词表在 `<dataDir>/tags/`，改了热重载 |
 | `docs/CONTRACT.md` | **本文件**：唯一权威核心契约（目录 / 配置 / 路由 / refine / forge / tags / SPI / 客户端 / 门禁） |
@@ -301,19 +313,23 @@ window.__ModuleLoader__.load({
 ## 11. 门禁（改完必须过）
 
 ```bash
-# 词表结构自检（data/tags/*.jsonl 每行合法 + 同文件 tag 不重复）
-node scripts/check-tags.mjs
-
-# 全量测试（本机没有 node 时用 Electron 当 node）
-ELECTRON_RUN_AS_NODE=1 "<DeepSeek Harness.exe>" --test --test-concurrency=1 tests/*.test.mjs
-
-# 静态类型检查（不进构建，只查）
-npx tsc --noEmit -p tsconfig.json
+npm run check:tags   # 词表结构自检（data/tags/*.jsonl 每行合法 + 同文件 tag 不重复）
+npm run typecheck    # tsc --noEmit -p tsconfig.json（不进构建，只查）
+npm test             # 全量测试，串行（scripts/run-tests.mjs）
+npm run check        # 上面三道连跑
+npm run bench        # 本地计算层基准，超预算 exit 1（见 docs/PERF.md）
 ```
 
-三道门禁与 `.github/workflows/ci.yml` 一一对应（CI 是 windows-latest，与开发机一致）。
+`npm test` 走 `scripts/run-tests.mjs`，不是裸的 `node --test`：Node 20.11 之前没有
+`--test-concurrency`，写死在 package.json 里会让老版本直接报参数错；脚本按版本决定加不加。
+`package.json` 的 `engines.node` 是 `>=18.18.0`，CI 用 Node 20。
 
-该 workflow 文件目前因 token 缺 `workflow` scope 没有随仓提交（见 `.gitignore` 里的说明）；补上 scope 后删掉那两行再提交即可，门禁命令本身不用改。
+这四道门禁与 `.github/workflows/ci.yml` 一一对应（CI 是 windows-latest，与开发机一致；
+步骤依次是 `npm install` → `npm run check:tags` → `npm run typecheck` → `npm test`）。
+
+**本机没有 `node` 命令时**（只有宿主自带的 Electron）：用
+`ELECTRON_RUN_AS_NODE=1 "<DeepSeek Harness.exe>" scripts/run-tests.mjs`，
+同理 `... scripts/check-tags.mjs` / `... /tmp/tsdk/package/lib/tsc.js -p tsconfig.json`。
 
 **测试必须串行跑**（`--test-concurrency=1`）：deliverable 里有几个套件会读同一份默认词表目录，进程并行时可能撞上另一个进程正在重写 overlay，表现为偶发 1 条失败（单跑必绿）。这不是业务 bug，但不许在门禁里并行。
 
