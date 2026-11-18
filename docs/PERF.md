@@ -32,7 +32,7 @@ node scripts/bench.mjs --json --rounds 50
 | 面板与服务端版本不一致 | 老客户端缺字段一律有兜底（`pipeline` / `purge` / `spi` 都是可选读），不因为多一个字段就白屏 | `client/`、`server/public/` |
 | 进程退出 | SIGINT/SIGTERM 反序 dispose，keep-alive 连接 destroy，4s 兜底强退 | `server/standalone.mjs` |
 | 静态资源被穿越 | `/public` 三重防护：拒 `..`/空段/NUL → resolve 后必须仍在目录内 → 必须 isFile | `server/standalone.mjs` |
-| 宿主路由把 `..` 折叠掉 | `rawPathOf()` 只切 `?`/`#`，不用 `new URL().pathname`（URL 规范会把 `/public/../index.js` 规范化成 `/index.js` 直击面板） | `server/shims.mjs` |
+| 宿主路由把 `..` 折叠掉 | `rawPathOf()` 只切 `?`/`#`，不用 `new URL().pathname`（URL 规范会把 `/public/../index.js` 规范化成 `/index.js` 直击面板） | `lib/cordis/host.js`（原 `server/shims.mjs`） |
 
 ## 没做（有意识的不做）
 

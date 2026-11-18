@@ -138,6 +138,32 @@ test('GET /spi：暴露 SPI 版本与槽位快照', async () => {
   })
 })
 
+test('GET /locale：中英语言包都能取、key 数一致，非法 lang 退回 zh', async () => {
+  await withServer({}, async ({ base }) => {
+    const zh = await getJson(base + '/locale')
+    assert.equal(zh.status, 200)
+    assert.equal(zh.body.ok, true)
+    assert.equal(zh.body.locale, 'zh')
+    assert.deepEqual(zh.body.langs, ['zh', 'en'])
+    assert.equal(typeof zh.body.dict, 'object')
+    assert.ok(Object.keys(zh.body.dict).length > 0, '中文语言包是空的')
+
+    const en = await getJson(base + '/locale?lang=en')
+    assert.equal(en.status, 200)
+    assert.equal(en.body.locale, 'en')
+    assert.equal(
+      Object.keys(en.body.dict).length,
+      Object.keys(zh.body.dict).length,
+      '中英 key 数不一致：' + Object.keys(en.body.dict).length + ' vs ' + Object.keys(zh.body.dict).length,
+    )
+
+    const bad = await getJson(base + '/locale?lang=fr')
+    assert.equal(bad.status, 200)
+    assert.equal(bad.body.locale, 'zh', '非法 lang 要退回 zh')
+    assert.equal(Object.keys(bad.body.dict).length, Object.keys(zh.body.dict).length)
+  })
+})
+
 test('POST /refine：增量精修只回差分，空指令 400/502 不崩', async () => {
   const refineReply = JSON.stringify({
     add: ['night', 'indoors'],

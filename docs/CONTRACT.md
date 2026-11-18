@@ -38,7 +38,8 @@ HTTP/MCP 的逐条参数与示例不在这里，看 [`API.md`](./API.md)。
 | `lib/config.js` | 默认配置与归一化（`DEFAULTS` + `normalize`） |
 | `lib/poses.js` | 姿势目录与缩略图查找（`createPoseCatalog` / `poseImage`） |
 | `server/standalone.mjs` | 脱离 DSH 的独立 HTTP 服务（web 版入口） |
-| `server/shims.mjs` | 独立模式的最小 ctx（llm / webServer / tools 三个 shim） |
+| `server/shims.mjs` | **纯 Cordis 生命周期垫片**：`createContext` + 8 个传输层名字再导出，≤12KB（有测试护栏） |
+| `lib/cordis/host.js` | 独立模式的 ctx 装配与织入：llm / webServer / tools 三个传输层的实现正文 |
 | `server/public/` | Web 面板静态资源，由独立服务的 `/public` 前缀提供（白名单扩展名 + 三重防穿越 + `no-cache`/ETag）：`panel.css` / `api.js` / `state.js` / `render.js`（灯 / 结果卡 / 错误码表）/ `settings.js`（LLM 与 ComfyUI 设置、工作流下拉、参考图行）/ `history.js`（历史、姿势弹窗、出图轮询、`localStorage` 参数记忆）/ `app.js`（只管 boot 与事件绑定） |
 | `lib/seed-tags.js` | 内置 seed 词条的薄入口（`SEED_TAGS = loadSeedRows()`）；词条本体在 `data/tags/seed/seed-01..13-*.jsonl` |
 | `scripts/run-tests.mjs` | `npm test` 的入口：按 Node 版本决定加不加 `--test-concurrency=1`（<20.11 没有该参数） |
@@ -57,7 +58,7 @@ HTTP/MCP 的逐条参数与示例不在这里，看 [`API.md`](./API.md)。
 
 ```js
 {
-  ctx,        // 宿主上下文；独立服务下是 server/shims.mjs 造的最小对象
+  ctx,        // 宿主上下文；独立服务下是 server/shims.mjs → lib/cordis/host.js 造的最小对象
   config,     // 归一化后的配置，键见第 3 节
   log,        // { info, warn, error }
   dir,        // 数据目录，默认 ~/.dsh-tagger

@@ -4,6 +4,7 @@
  *
  * 三件事：① 出图轮询与结果图片；② 参考图上传与预览；③ 姿势缩略图弹窗；
  * 外加「关掉浏览器再回来还在」的参数记忆（localStorage）。
+ * 界面文案一律 T('ui.…')，本文件不写死中文。
  */
 function fmtSize(bytes) {
   if (!bytes) return "0 B";
@@ -15,11 +16,11 @@ async function pickRef(file) {
   if (!file) return;
   var status = $("ref-status");
   status.className = "hint";
-  status.textContent = "上传中…（" + fmtSize(file.size) + "）";
+  status.textContent = T("ui.ref.uploading", { size: fmtSize(file.size) });
   var dataUrl = await new Promise(function (resolve, reject) {
     var reader = new FileReader();
     reader.onload = function () { resolve(String(reader.result || "")) };
-    reader.onerror = function () { reject(new Error("读不出这个文件")) };
+    reader.onerror = function () { reject(new Error(T("ui.ref.readFailed"))) };
     reader.readAsDataURL(file);
   });
   var res = await api("/upload", { method: "POST", body: JSON.stringify({ filename: file.name, data: dataUrl }) });
@@ -27,7 +28,7 @@ async function pickRef(file) {
   if (d.ok !== true) {
     state.refName = "";
     status.className = "hint err";
-    status.textContent = "上传失败：" + errText(d, res.status);
+    status.textContent = T("ui.ref.uploadFailed", { text: errText(d, res.status) });
     return;
   }
   state.refName = d.name;
@@ -35,9 +36,9 @@ async function pickRef(file) {
   preview.src = dataUrl;
   preview.style.display = "";
   status.className = "hint";
-  status.textContent = "已上传 · " + d.name + " · " + fmtSize(d.bytes || 0) + "（出图时自动带上）";
+  status.textContent = T("ui.ref.uploaded", { name: d.name, size: fmtSize(d.bytes || 0) });
   $("gen-status").className = "hint";
-  $("gen-status").textContent = "参考图就位，点「出图」";
+  $("gen-status").textContent = T("ui.ref.ready");
 }
 /* ── 姿势库：下拉（隐藏）+ 缩略图卡片 + 弹窗 ─────────────────────────── */
 async function loadPoses() {
@@ -50,7 +51,11 @@ async function loadPoses() {
   poses.forEach(function (p) { state.poseIndex[p.id] = p });
   renderPoseSets();
   if (!poses.length) {
-    sel.innerHTML = "<option value=\"\">（没读到姿势库，检查 ComfyUI 目录下的 ai-pose-gallery-zh）</option>";
+    sel.innerHTML = "";
+    var none = document.createElement("option");
+    none.value = "";
+    none.textContent = T("ui.pose.noneOption");
+    sel.appendChild(none);
     return;
   }
   sel.innerHTML = "";
@@ -80,21 +85,21 @@ function syncPoseBtn() {
   var img = $("pose-thumb");
   if (!p) {
     img.hidden = true;
-    $("pose-name").textContent = "还没有选姿势";
-    $("pose-meta").textContent = "点这里按缩略图挑";
+    $("pose-name").textContent = T("ui.pose.none");
+    $("pose-meta").textContent = T("ui.pose.pickHint");
     return;
   }
   img.hidden = false;
   img.src = poseThumbUrl(p.id);
   $("pose-name").textContent = (p.name || p.id) + (p.angle ? " · " + p.angle : "");
-  $("pose-meta").textContent = p.id + (p.category ? " · " + p.category : "") + " · 点这里换一张";
+  $("pose-meta").textContent = p.id + (p.category ? " · " + p.category : "") + T("ui.pose.changeHint");
 }
 function renderPoseSets() {
   var box = $("pose-sets");
   box.innerHTML = "";
   var counts = {};
   state.poses.forEach(function (p) { var k = p.set || "pose"; counts[k] = (counts[k] || 0) + 1 });
-  var items = [{ key: "", label: "全部", n: state.poses.length }];
+  var items = [{ key: "", label: T("ui.pose.all"), n: state.poses.length }];
   Object.keys(counts).sort().forEach(function (k) { items.push({ key: k, label: k, n: counts[k] }) });
   items.forEach(function (s) {
     var b = document.createElement("button");
@@ -144,8 +149,8 @@ function renderPoseGrid() {
     fig.addEventListener("click", function () { selectPose(p.id) });
     grid.appendChild(fig);
   });
-  var tail = list.length > shown.length ? "，先显示前 " + shown.length + " 条 —— 缩小搜索或换体系" : "";
-  $("pose-count").textContent = "匹配 " + list.length + " 条" + tail;
+  var tail = list.length > shown.length ? T("ui.pose.truncated", { n: shown.length }) : "";
+  $("pose-count").textContent = T("ui.pose.count", { n: list.length }) + tail;
 }
 function selectPose(id) {
   $("pose").value = id;
@@ -156,12 +161,12 @@ function openPoseModal() {
   var wid = $("workflow").value || "";
   if (wid.indexOf("pose") < 0) {
     $("gen-status").className = "hint err";
-    $("gen-status").textContent = "当前工作流不吃姿势变量：选 feiyue-sam3-pose 那类模板才有用。";
+    $("gen-status").textContent = T("ui.pose.notPoseWorkflow");
     return;
   }
   if (!state.poses.length) {
     $("gen-status").className = "hint err";
-    $("gen-status").textContent = "姿势库还没读到（检查 ComfyUI 目录下的 ai-pose-gallery-zh）。";
+    $("gen-status").textContent = T("ui.pose.notLoaded");
     return;
   }
   $("pose-modal").hidden = false;
@@ -189,16 +194,17 @@ async function pollJob(promptId) {
   var res = await api("/job?id=" + encodeURIComponent(promptId));
   var d = res.data || {};
   if (d.state === "done" || d.state === "success" || (d.images || []).length > 0) {
-    $("gen-status").textContent = "出图完成 · " + (d.images || []).length + " 张";
+    $("gen-status").textContent = T("ui.run.done", { n: (d.images || []).length });
     renderImages(d.images);
     return;
   }
   if (d.state === "failed" || d.state === "error") {
     $("gen-status").className = "hint err";
-    $("gen-status").textContent = "失败：" + (errText(d, res.status) + " · " + (d.state || "")).replace(/ · $/, "");
+    $("gen-status").textContent = T("ui.run.failed", { text: (errText(d, res.status) + " · " + (d.state || "")).replace(/ · $/, "") });
     return;
   }
-  $("gen-status").textContent = "排队中 / 采样中…（" + (d.state || "?") + (d.queuePosition ? " · 队列第 " + d.queuePosition : "") + "）";
+  var queue = d.queuePosition ? T("ui.run.queuePosition", { n: d.queuePosition }) : "";
+  $("gen-status").textContent = T("ui.run.polling", { state: (d.state || "?") + queue });
   state.timer = setTimeout(function () { pollJob(promptId) }, 3000);
 }
 /* ── 参数记忆：桌面版是全屏工具，关掉浏览器再回来还要接着用 ──────────── */

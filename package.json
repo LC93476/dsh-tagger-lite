@@ -20,16 +20,14 @@
   "files": [
     "index.js",
     "client.js",
-    "client",
-    "lib",
-    "server",
-    "data",
-    "scripts",
-    "locale/*.json",
+    "client/",
+    "lib/",
+    "server/",
+    "data/",
+    "locale/",
+    "types/",
     "icon.svg",
-    "cordis.patch.yml",
-    "README.md",
-    "docs"
+    "README.md"
   ],
   "scripts": {
     "test": "node scripts/run-tests.mjs",

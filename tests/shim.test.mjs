@@ -1,8 +1,10 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import fs from 'node:fs'
 import http from 'node:http'
-import { createLlmShim } from '../server/shims.mjs'
+import { createContext, createLlmShim } from '../server/shims.mjs'
 import { apiUrl, chatCompletionsUrl, createContextAdapter, createLogger, llmSettings, modelsUrl } from '../lib/cordis/adapter.js'
+import { SERVICE_KEYS, bindServices, readConfig, saveConfig, servicesOf } from '../lib/spi.js'
 
 /** @param {import('node:net').Server} server @returns {number} */
 function portOf(server) {
@@ -116,4 +118,36 @@ test('adapter：createLogger 走调用方的 write，前缀由它拼', () => {
   log.error('boom')
   assert.deepEqual(lines, ['info [t] a 1', 'warn [t] {"x":2}', 'error [t] boom'])
 })
+
+test('shims.mjs 门面：只剩生命周期，体量 ≤12KB 且不含传输实现', () => {
+  const source = fs.readFileSync(new URL('../server/shims.mjs', import.meta.url), 'utf8')
+  const bytes = Buffer.byteLength(source)
+  assert.ok(bytes <= 12288, 'shims.mjs 超过 12KB：' + bytes)
+  for (const marker of ['http.createServer', 'fetch(', 'createMcpHandler', 'tools.register', "path: '/mcp'", 'register({ kind']) {
+    assert.equal(source.includes(marker), false, 'shims.mjs 里不该再有传输 / MCP 实现：' + marker)
+  }
+  // 门面必须把原来那批名字继续导出（standalone.mjs 与这个测试直接用）
+  for (const name of ['createLlmShim', 'createWebServerShim', 'createToolsShim', 'createContext', 'flattenMessages', 'normalizeBaseUrl', 'chatCompletionsUrl', 'modelsUrl']) {
+    assert.equal(source.includes(name), true, 'shims.mjs 丢了导出：' + name)
+  }
+})
+
+test('spi：servicesOf / bindServices 把 runtime 的服务装进 ctx，缺席的跳过', () => {
+  const rt = { llm: { tag: 'L' }, comfy: { tag: 'C' }, forge: undefined, tags: null }
+  assert.deepEqual(Object.keys(servicesOf(rt, ['llm', 'comfy', 'forge', 'tags'])), ['llm', 'comfy'])
+  assert.deepEqual(servicesOf(null), {}, 'rt 不是对象就给空表')
+
+  const ctx = createContext({})
+  assert.deepEqual(bindServices(ctx, rt, ['llm', 'comfy', 'forge']), ['llm', 'comfy'])
+  assert.deepEqual(ctx.get('comfy'), { tag: 'C' })
+  assert.deepEqual(bindServices({}, rt), [], '没有 provide 的 ctx 不该抛')
+})
+
+test('spi：配置读写有统一入口，服务名清单固定', () => {
+  assert.equal(typeof readConfig, 'function')
+  assert.equal(typeof saveConfig, 'function')
+  assert.deepEqual(SERVICE_KEYS.slice(0, 3), ['llm', 'webServer', 'tools'])
+  assert.ok(SERVICE_KEYS.includes('refine'))
+})
+
 

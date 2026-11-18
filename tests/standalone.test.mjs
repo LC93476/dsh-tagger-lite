@@ -14,7 +14,7 @@ import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
 import http from 'node:http'
 import { mkdtemp, rm } from 'node:fs/promises'
-import { statSync, utimesSync } from 'node:fs'
+import { readFileSync, statSync, utimesSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -199,8 +199,8 @@ test('standalone：health / spi / spi.version / 根路径 HTML 都能对外提�
     const apiRes = await fetch(url + '/tagger/api/health')
     assert.equal(apiRes.headers.get('cache-control'), 'no-store', '接口数据必须 no-store')
 
-    // 面板脚本按职责拆成四个文件，逐文件读回来再断言（原来都塞在 app.js 里）
-    const publicFiles = ['/public/api.js', '/public/state.js', '/public/render.js', '/public/settings.js', '/public/history.js', '/public/app.js']
+    // 面板脚本按职责拆成六个文件（外加 i18n），逐文件读回来再断言（原来都塞在 app.js 里）
+    const publicFiles = ['/public/api.js', '/public/i18n.js', '/public/state.js', '/public/render.js', '/public/settings.js', '/public/history.js', '/public/app.js']
     /** @type {Record<string, string>} */
     const src = {}
     for (const p of publicFiles) {
@@ -215,6 +215,7 @@ test('standalone：health / spi / spi.version / 根路径 HTML 都能对外提�
     const historyJs = src['/public/history.js']
     const stateJs = src['/public/state.js']
     const apiJs = src['/public/api.js']
+    const i18nJs = src['/public/i18n.js']
 
     // app.js 只做编排：三个动作 + boot，渲染/设置/预览都各自成文件
     assert.ok(appJs.includes('doRefine'), '精修动作留在 app.js')
@@ -231,12 +232,12 @@ test('standalone：health / spi / spi.version / 根路径 HTML 都能对外提�
     const loadUiCalls = (appJs + settingsJs + historyJs).split('loadUi()').length - 1
     assert.ok(loadUiCalls >= 2, 'boot 与 reloadState 都要调用 loadUi()')
 
-    // 渲染层：结果卡 + 状态灯 + 错误码中文表（别把 bad-type / no-launch-dir 直接甩给用户）
+    // 渲染层：结果卡 + 状态灯 + 错误码表（表里只放「码 → 字典键」，人话在 locale 里）
     assert.ok(renderJs.includes('renderResult'), 'renderResult 在 render.js')
     assert.ok(renderJs.includes('setLamp'), '状态灯在 render.js')
-    assert.ok(renderJs.includes('ERR_TEXT'), 'render.js 要有错误码中文表')
-    assert.ok(renderJs.includes('只收 png / jpg / webp 图片'), 'bad-type 要有中文说明')
-    assert.ok(renderJs.includes('先在设置里填 ComfyUI 的安装目录'), 'no-launch-dir 要有中文说明')
+    assert.ok(renderJs.includes('ERR_TEXT'), 'render.js 要有错误码表')
+    assert.ok(renderJs.includes('"bad-type": "err.bad-type"'), 'bad-type 要映射到字典键')
+    assert.ok(renderJs.includes('"no-launch-dir": "err.no-launch-dir"'), 'no-launch-dir 要映射到字典键')
 
     // 设置层：/state 之后回填表单，工作流换成 CN 强度联动
     assert.ok(settingsJs.includes('api("/state")'), 'reloadState 在 settings.js')
@@ -284,10 +285,64 @@ test('standalone：health / spi / spi.version / 根路径 HTML 都能对外提�
 
     assert.ok(apiJs.includes('"/tagger/api"'), '面板要打到自己这个前缀上')
 
-    // 面板骨架必须按依赖顺序加载：api → state → render/settings/history → app（app.js 最后）
-    const order = ['/public/api.js', '/public/state.js', '/public/render.js', '/public/settings.js', '/public/history.js', '/public/app.js'].map(p => panel.indexOf(p))
+    // 界面文案一律走字典：public 脚本去掉注释后不许再有中文字符（唯一例外是 i18n.js 里的内置字典）
+    for (const p of publicFiles) {
+      if (p === '/public/i18n.js') continue
+      const code = src[p]
+        .replace(/\/\*[\s\S]*?\*\//g, ' ')
+        .split('\n')
+        .map(line => line.replace(/(^|\s)\/\/.*$/, '$1'))
+        .join('\n')
+      assert.equal(/[\u4e00-\u9fff]/.test(code), false, p + ' 的文案要走 T()，不许硬编码中文')
+    }
+
+    // 字典本身：中英 key 必须完全一致，脚本里用到的每个 key 两边都要有
+    const localeDir = path.join(here, '..', 'locale')
+    const zhDict = JSON.parse(readFileSync(path.join(localeDir, 'zh.json'), 'utf8'))
+    const enDict = JSON.parse(readFileSync(path.join(localeDir, 'en.json'), 'utf8'))
+    assert.deepEqual(Object.keys(zhDict).sort(), Object.keys(enDict).sort(), 'locale/zh.json 与 locale/en.json 的 key 必须完全一致')
+    const usedKeys = new Set()
+    for (const p of publicFiles) for (const hit of src[p].matchAll(/T\("([^"]+)"/g)) usedKeys.add(hit[1])
+    assert.ok(usedKeys.size > 50, '桌面端文案要真从字典取，实际只用到 ' + usedKeys.size + ' 个 key')
+    for (const key of usedKeys) {
+      assert.equal(Object.prototype.hasOwnProperty.call(zhDict, key), true, key + ' 要在 locale/zh.json 里')
+      assert.equal(Object.prototype.hasOwnProperty.call(enDict, key), true, key + ' 要在 locale/en.json 里')
+    }
+    // 错误码表里的每个 err.* 键都得在字典里有对应人话（不许出现裸键）
+    const errKeys = Array.from(renderJs.matchAll(/"([a-z0-9-]+)": "(err\.[a-z0-9-]+)"/g), hit => hit[2])
+    assert.ok(errKeys.length >= 20, '错误码表太小，实际 ' + errKeys.length + ' 条')
+    for (const key of errKeys) {
+      assert.equal(Object.prototype.hasOwnProperty.call(zhDict, key), true, '错误码 ' + key + ' 要在 locale/zh.json 里')
+      assert.equal(Object.prototype.hasOwnProperty.call(enDict, key), true, '错误码 ' + key + ' 要在 locale/en.json 里')
+    }
+
+    // i18n 装配：T + 静态骨架重写 + 语言选择 + 切换后重渲染
+    assert.ok(i18nJs.includes('I18N_KEY') && i18nJs.includes('function T('), 'i18n.js 要提供 T 与语言记忆')
+    assert.ok(i18nJs.includes('"/locale?lang='), '字典要从 GET /locale 拿')
+    assert.ok(i18nJs.includes('i18nApplyStatic') && i18nJs.includes('i18nStart'), '静态骨架要能跟着语言重写')
+    assert.ok(panel.includes('<select id="lang"'), '面板要有语言选择')
+    assert.ok(appJs.includes('i18nSetLang'), '换语言要真的切字典并重渲染')
+
+    // GET /locale 由主服务提供，形状固定；前端在它缺席时降级到内置 zh（i18n.js 的 I18N_BUILTIN_ZH）
+    const localeRes = await fetch(url + '/tagger/api/locale?lang=zh')
+    assert.equal(localeRes.status, 200, '/locale 要由 /tagger/api 主线提供')
+    assert.equal(localeRes.headers.get('cache-control'), 'no-store', '接口数据必须 no-store')
+    const localeBody = await localeRes.json()
+    assert.equal(localeBody.ok, true)
+    assert.equal(localeBody.locale, 'zh')
+    assert.deepEqual(localeBody.langs, ['zh', 'en'])
+    assert.equal(typeof localeBody.dict, 'object')
+    assert.deepEqual(Object.keys(localeBody.dict).sort(), Object.keys(zhDict).sort(), '/locale 与 locale/zh.json 必须同源')
+    const enRes = await (await fetch(url + '/tagger/api/locale?lang=en')).json()
+    assert.equal(enRes.locale, 'en')
+    assert.equal(enRes.dict['ui.common.copy'], enDict['ui.common.copy'], '?lang=en 要回英文那份')
+    const fallbackLang = await (await fetch(url + '/tagger/api/locale?lang=fr')).json()
+    assert.equal(fallbackLang.locale, 'zh', '非法 lang 退回 zh')
+
+    // 面板骨架必须按依赖顺序加载：api → i18n → state → render/settings/history → app（app.js 最后）
+    const order = ['/public/api.js', '/public/i18n.js', '/public/state.js', '/public/render.js', '/public/settings.js', '/public/history.js', '/public/app.js'].map(p => panel.indexOf(p))
     for (let i = 1; i < order.length; i++) {
-      assert.ok(order[i - 1] >= 0 && order[i - 1] < order[i], 'panel.html 里脚本顺序必须是 api → state → render/settings/history → app')
+      assert.ok(order[i - 1] >= 0 && order[i - 1] < order[i], 'panel.html 里脚本顺序必须是 api → i18n → state → render/settings/history → app')
     }
     assert.ok(panel.lastIndexOf('<script') === panel.lastIndexOf('/public/app.js') - '<script src="'.length, 'app.js 必须是最后一个脚本')
 

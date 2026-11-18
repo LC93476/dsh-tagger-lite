@@ -14,6 +14,7 @@
 | GET | `/models?provider=` | 该 provider 可用模型列表 |
 | POST | `/probe` | LLM 连通性探针，返回逐 chunk 摘要（`{ ok, args, chunks }`） |
 | GET | `/spi` | SPI 注册表快照 `{ ok, spi: { version, slots: { 槽位: [{ id, label }] }, hooks: { 钩子: [id] }, backends } }` —— `slots` / `hooks` 是**对象**（按槽位名分组），不是数组 |
+| GET | `/locale?lang=zh` | 语言包：`{ ok: true, locale, langs: ['zh','en'], dict }`；`?lang=en` 取英文，非法值退回 `zh`；读不到包回 500 + `{ ok: false, error: 'no-locale', message }` |
 | POST | `/forge` | 白话 → 标签：body `{ text, options }` |
 | POST | `/refine` | 二次精修：body `{ positive, negative, instruction, mode, options }` |
 | GET | `/workflows` | 模板列表 `{ workflows, dir }` |

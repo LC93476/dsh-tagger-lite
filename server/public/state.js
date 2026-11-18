@@ -9,6 +9,8 @@
  * 这里一律读 defaultValue（用户清空输入框时也回落到它），绝不在 JS 里再抄一份 1200/1800/30，
  * 否则两边迟早对不上。真正需要跟服务端配置对齐的字段（最多标签数、精修模式）由 applyUiDefaults
  * 从 /state 的 config 回填。
+ *
+ * 界面文案一律走 i18n.js 的 T('ui.…')，这里不写死中文。
  */
 /**
  * 出图变量的兜底值 —— 全前端唯一一张常量表（别的文件不许再抄一份 1200/1800/30）。
@@ -134,13 +136,17 @@ function fillSettings(config) {
   $("llm-model").value = llm.model || "";
   $("llm-provider").value = llm.provider || "";
   $("llm-key").value = "";
-  $("llm-key").placeholder = llm.apiKeySet ? "已配置 " + (llm.apiKeyHint || "••••") + "（留空表示不改）" : "没配过就粘进来";
-  setStatus("llm-status", llm.apiKeySet ? "当前接口已配置" + (llm.baseUrl ? " · " + llm.baseUrl : "") : "还没配接口 —— 锻造会回 no-llm", false);
+  $("llm-key").placeholder = llm.apiKeySet
+    ? T("ui.llm.keySetPlaceholder", { hint: llm.apiKeyHint || "••••" })
+    : T("ui.llm.keyEmptyPlaceholder");
+  setStatus("llm-status", llm.apiKeySet
+    ? (llm.baseUrl ? T("ui.llm.statusReady", { baseUrl: llm.baseUrl }) : T("ui.llm.statusReadyNoUrl"))
+    : T("ui.llm.statusMissing"), false);
   $("comfy-baseurl").value = comfy.baseUrl || "";
   $("comfy-dir").value = comfy.launchDir || "";
   $("comfy-python").value = comfy.pythonPath || "";
   $("comfy-workflows").value = comfy.workflowDir || "";
   $("comfy-default").value = comfy.defaultWorkflowId || "";
-  setStatus("comfy-status", "ComfyUI " + (comfy.baseUrl || "（默认 127.0.0.1:8188）"), false);
+  setStatus("comfy-status", T("ui.comfy.statusLine", { url: comfy.baseUrl || T("ui.comfy.defaultBase") }), false);
   applyUiDefaults(config);
 }

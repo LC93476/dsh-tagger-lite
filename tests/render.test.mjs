@@ -451,10 +451,19 @@ test('模块形状：注册 id 与包名一致、单一 Panel、侧边栏图标 
 
   assert.equal(locales.length, 1)
   assert.equal(locales[0].namespace, pkg.name)
+  // locale/*.json 是双端共享的字典：桌面端那套 ui.* / err.* 也住在里面，所以这里断言
+  // 「客户端每个键都在共享字典里、且文案一致」，而不是整份 deepEqual。
   const zh = JSON.parse(readFileSync(zhPath, 'utf8'))
   const en = JSON.parse(readFileSync(enPath, 'utf8'))
-  assert.deepEqual(locales[0].tables.zh, zh)
-  assert.deepEqual(locales[0].tables.en, en)
+  for (const [lang, table] of [['zh', zh], ['en', en]]) {
+    for (const [key, value] of Object.entries(locales[0].tables[lang])) {
+      // meta 是嵌套对象（title / description），其余都是扁平字符串。
+      const label = lang + ' 字典的 ' + key + ' 要与 locale/' + lang + '.json 一致'
+      if (value !== null && typeof value === 'object') assert.deepEqual(table[key], value, label)
+      else assert.equal(table[key], value, label)
+    }
+  }
+  assert.ok(Object.keys(zh).length > Object.keys(locales[0].tables.zh).length, '共享字典是超集，要含桌面端多出来的 ui.* / err.* 键')
   assert.deepEqual(Object.keys(zh).sort(), Object.keys(en).sort())
   assert.equal(zh.meta.title, '提示词锻造台')
   assert.ok(typeof en.meta.description === 'string' && en.meta.description.length > 10)
@@ -1390,4 +1399,30 @@ test('参考图上传失败按 ref.err.<code> 翻成中文，认不出的码退�
     if (hadReader === undefined) delete globalThis.FileReader
     else Object.defineProperty(globalThis, 'FileReader', hadReader)
   }
+})
+
+test('拆分后的子模块能被 _mod 取到：panel-input 导出 inputViews、panel-actions 导出 createActions', async () => {
+  // 宿主按 {PREFIX}/_mod/client/<name>.js 逐个取，路径与文件名都在白名单里（体积护栏那条也在查）。
+  const input = await import(MODBASE + 'panel-input.js')
+  assert.equal(typeof input.inputViews, 'function', 'panel-input.js 要导出 inputViews')
+  assert.equal(input.inputViews.length, 1, 'inputViews(p) 收一个共享 bag')
+
+  const actions = await import(MODBASE + 'panel-actions.js')
+  assert.equal(typeof actions.createActions, 'function', 'panel-actions.js 要导出 createActions')
+  assert.equal(actions.createActions.length, 1, 'createActions(ctx) 收一个参数')
+
+  // 拆分关系固定下来：panel.js 只做骨架与状态编排，控件构建 / 标签动作都在子模块里。
+  const panelSrc = readFileSync(path.join(clientDir, 'panel.js'), 'utf8')
+  assert.ok(panelSrc.includes("from './panel-actions.js'"), 'panel.js 要从 panel-actions.js 拿标签动作')
+  assert.equal(/function removeChip\s*\(/.test(panelSrc), false, 'removeChip 已经搬到 panel-actions.js')
+  assert.equal(/function runRefine\s*\(/.test(panelSrc), false, 'runRefine 已经搬到 panel-actions.js')
+
+  const shellSrc = readFileSync(path.join(clientDir, 'view-shell.js'), 'utf8')
+  assert.ok(shellSrc.includes("from './panel-input.js'"), 'view-shell.js 要从 panel-input.js 拿输入控制区')
+  assert.ok(shellSrc.includes('inputViews('), 'view-shell.js 要真的用上 inputViews')
+
+  const inputSrc = readFileSync(path.join(clientDir, 'panel-input.js'), 'utf8')
+  assert.ok(inputSrc.includes('levelSelect'), '输入区里要有破甲档位选择')
+  const actionSrc = readFileSync(path.join(clientDir, 'panel-actions.js'), 'utf8')
+  assert.ok(actionSrc.includes('runRefine') && actionSrc.includes('removeChip'), '标签动作要真的搬过来了')
 })

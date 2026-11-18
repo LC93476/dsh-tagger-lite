@@ -1,9 +1,12 @@
 // 面板主组件：状态、副作用、动作。视图由 view-*.js 负责，这里只做组装。
-import { API, DEFAULT_POLL_MS, JOB_KEY, LEVELS, NS, PANEL_ID, REFINE_MODES, TAB_ID } from './constants.js'
+import { API, DEFAULT_POLL_MS, JOB_KEY, NS, PANEL_ID, REFINE_MODES, TAB_ID } from './constants.js'
 import { createT, dict, withFallback } from './locale.js'
-import { chosenStandards, clampInt, describe, formatTag, formatTagLine, normalizeDelta, normalizePipeline, normalizePurge, normalizeTags } from './state.js'
-import { apiUrl, imageSrc, readAsDataUrl, requestJson } from './api.js'
+import { clampInt, formatTag, formatTagLine, normalizeDelta, normalizePurge } from './state.js'
+import { apiUrl, imageSrc, requestJson } from './api.js'
 import { createIcon } from './icon.js'
+import { createActions } from './panel-actions.js'
+import { createRunOps } from './panel-runs.js'
+import { createSettingsOps } from './panel-settings.js'
 import { shell } from './view-shell.js'
 
 /**
@@ -15,25 +18,6 @@ function countEntries(value) {
   if (value !== null && typeof value === 'object') return Object.keys(value).length
   const n = Number(value)
   return Number.isFinite(n) && n > 0 ? Math.round(n) : 0
-}
-
-/**
- * /upload 的失败文案：服务端只回错误码（bad-type / empty-file / too-large / no-launch-dir），
- * 先按 ref.err.<code> 查本地字典翻成中文；查不到就退回服务端 message，再退回原码 ——
- * 绝不把真实错误吞成一句笼统的「上传失败」。
- */
-function uploadErrorText(res, t) {
-  const payload = res !== null && res !== undefined && res.payload !== null && typeof res.payload === 'object' ? res.payload : {}
-  const code = typeof payload.error === 'string' ? payload.error : ''
-  if (code !== '') {
-    const key = 'ref.err.' + code
-    const mapped = t(key)
-    if (typeof mapped === 'string' && mapped !== '' && mapped !== key) return mapped
-  }
-  if (typeof payload.message === 'string' && payload.message !== '') return payload.message
-  if (typeof res?.message === 'string' && res.message !== '') return res.message
-  if (code !== '') return code
-  return t('ref.failed')
 }
 
 // 面板组件：只放状态、钩子与动作；渲染全在 client/view-*.js 里，靠一个 bag 传进去。
@@ -253,7 +237,6 @@ function Panel(props) {
     ? ''
     : result.negativeChips.length > 0 ? formatTagLine(result.negativeChips) : result.negative
 
-
   // 中英对照：一行一条「(tag:权重) — 中文」。权重跟着正向串走（1 不带括号），
   // 库里没中文就只留带权重的 tag，不编中文、不留空破折号。
   const pairOf = chip => {
@@ -266,217 +249,27 @@ function Panel(props) {
   const bilingualText = pairLines.join('\n')
   const negativePairText = (result?.negativeChips ?? []).map(pairOf).join('\n')
 
-  const generate = async () => {
-    const value = text.trim()
-    if (value === '') {
-      setForge({ status: 'error', error: t('error.emptyText') })
-      return
-    }
-    setForge({ status: 'forging', error: '' })
-    setCopyStatus('idle')
-    setRun({ status: 'idle', promptId: '', images: [], error: '' })
-    // 新一轮锻造换了结果，上一轮的 delta 就不再对应当前标签了。
-    setRefine(previous => ({ ...previous, status: 'idle', error: '', delta: null }))
-    const res = await requestJson(api + '/forge', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        text: value,
-        options: { standards: chosenStandards(standards), maxTags, purgeLevel: level },
-      }),
-    })
-    if (!res.ok || res.payload?.ok === false) {
-      setForge({ status: 'error', error: res.payload?.message ?? res.message ?? t('error.forge') })
-      return
-    }
-    const payload = res.payload
-    setResult({
-      positive: String(payload.positive ?? ''),
-      negative: String(payload.negative ?? ''),
-      chips: normalizeTags(payload.tags),
-      negativeChips: normalizeTags(payload.negativeTags),
-      warnings: Array.isArray(payload.warnings) ? payload.warnings.map(item => String(item)) : [],
-      raw: String(payload.raw ?? ''),
-      model: String(payload.model ?? ''),
-      ms: Number(payload.ms) || 0,
-      repaired: payload.repaired === true,
-      pipeline: normalizePipeline(payload.pipeline),
-    })
-    if (typeof payload.purgeLevel === 'string' && LEVELS.includes(payload.purgeLevel)) {
-      setPurgeInfo(previous => normalizePurge({ ...previous, level: payload.purgeLevel }))
-    }
-    setForge({ status: 'done', error: '' })
+  /** 换破甲档：档位状态与灯一起走，别让两处各说各话。 */
+  const applyLevel = next => {
+    setLevel(next)
+    setPurgeInfo(previous => normalizePurge({ ...previous, level: next }))
   }
+
+  // 标签操作（chips / 复制 / 二次精修）在 client/panel-actions.js，这里只把这一轮的当前值传进去。
+  const { removeChip, runRefine, copyPositive, copyBilingual } = createActions({
+    api, t, result, setResult, refine, setRefine, positiveText, negativeText,
+    bilingualText, applyLevel, setCopyStatus, setCopyPair,
+  })
+
+  // 三段副作用（锻造 / 参考图上传 / 投递出图）在 client/panel-runs.js；设置保存与 ComfyUI 探活/拉起在
+  // client/panel-settings.js。这里只把这一轮的 state 与 setter 交出去，函数体是原样搬过去的。
+  const { generate, pickRef, submitRun } = createRunOps({
+    api, t, text, standards, maxTags, level, workflowId, refName, positiveText, negativeText,
+    setForge, setCopyStatus, setRun, setRefine, setResult, setPurgeInfo,
+    setRefName, setRefBusy, setRefError,
+  })
 
   const isRefWorkflow = workflowId.indexOf('ref') >= 0
-  // 参考图模板才带 image 变量；其它模板传了也会被 applyVars 丢掉，但保持请求干净更好
-  const runVars = isRefWorkflow && refName !== '' ? { image: refName } : {}
-
-  const pickRef = async event => {
-    const file = event?.target?.files?.[0]
-    if (file === undefined || file === null) return
-    setRefBusy(true)
-    setRefError('')
-    try {
-      const dataUrl = await readAsDataUrl(file)
-      const res = await requestJson(api + '/upload', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filename: String(file.name ?? 'ref.png'), data: dataUrl }),
-      })
-      if (!res.ok || res.payload?.ok === false) {
-        setRefName('')
-        setRefError(uploadErrorText(res, t))
-      } else {
-        setRefName(String(res.payload?.name ?? ''))
-      }
-    } catch (error) {
-      setRefName('')
-      setRefError(describe(error))
-    } finally {
-      setRefBusy(false)
-    }
-  }
-
-  const submitRun = async () => {
-    if (positiveText === '') return
-    setRun({ status: 'submitting', promptId: '', images: [], error: '' })
-    const res = await requestJson(api + '/run', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ workflowId, positive: positiveText, negative: negativeText, vars: runVars }),
-    })
-    if (!res.ok || res.payload?.ok === false) {
-      setRun({ status: 'failed', promptId: '', images: [], error: res.payload?.message ?? res.message ?? t('error.run') })
-      return
-    }
-    const promptId = String(res.payload?.promptId ?? '')
-    setRun({
-      status: promptId === '' ? 'failed' : 'queued',
-      promptId,
-      images: [],
-      error: promptId === '' ? t('error.run') : '',
-    })
-  }
-
-  const removeChip = index => {
-    if (result === null) return
-    setResult({ ...result, chips: result.chips.filter((_, at) => at !== index) })
-  }
-
-  // 二次精修：拿「当前看得见的」正负向串（用户可能已经点掉过芯片）去让模型增删标签，
-  // 成功后用返回的 tags/positive/negative 覆盖结果，其它字段（raw/warnings）保持原样。
-  const runRefine = async () => {
-    if (result === null || refine.status === 'running') return
-    setRefine(previous => ({ ...previous, status: 'running', error: '', delta: null }))
-    const res = await requestJson(api + '/refine', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        positive: positiveText,
-        negative: negativeText,
-        instruction: refine.instruction.trim(),
-        mode: refine.mode,
-        options: {},
-      }),
-    })
-    if (!res.ok || res.payload?.ok === false) {
-      setRefine(previous => ({
-        ...previous,
-        status: 'failed',
-        error: String(res.payload?.message ?? res.message ?? t('refine.failed')),
-        delta: null,
-      }))
-      return
-    }
-    const payload = res.payload ?? {}
-    const negativeGiven = typeof payload.negative === 'string' && payload.negative !== formatTagLine(result === null ? [] : result.negativeChips)
-    setResult(previous => previous === null ? previous : ({
-      ...previous,
-      positive: typeof payload.positive === 'string' ? payload.positive : previous.positive,
-      negative: typeof payload.negative === 'string' ? payload.negative : previous.negative,
-      chips: normalizeTags(payload.tags),
-      // 负向串变了但没给负向芯片时，宁可留空（回落 result.negative），也不留过期芯片。
-      negativeChips: Array.isArray(payload.negativeTags)
-        ? normalizeTags(payload.negativeTags)
-        : negativeGiven ? [] : previous.negativeChips,
-      model: typeof payload.model === 'string' && payload.model !== '' ? payload.model : previous.model,
-      ms: Number(payload.ms) > 0 ? Number(payload.ms) : previous.ms,
-    }))
-    setRefine(previous => ({ ...previous, status: 'done', error: '', delta: normalizeDelta(payload.delta) }))
-    if (typeof payload.purgeLevel === 'string' && LEVELS.includes(payload.purgeLevel)) {
-      setPurgeInfo(previous => normalizePurge({ ...previous, level: payload.purgeLevel }))
-    }
-  }
-
-  const copyPositive = async () => {
-    if (positiveText === '') return
-    try {
-      if (typeof navigator !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
-        await navigator.clipboard.writeText(positiveText)
-        setCopyStatus('copied')
-      } else {
-        setCopyStatus('failed')
-      }
-    } catch (error) {
-      setCopyStatus('failed')
-    }
-  }
-
-  const copyBilingual = async () => {
-    if (bilingualText === '') return
-    try {
-      if (typeof navigator !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
-        await navigator.clipboard.writeText(bilingualText)
-        setCopyPair('copied')
-      } else {
-        setCopyPair('failed')
-      }
-    } catch (error) {
-      setCopyPair('failed')
-    }
-  }
-  const saveSettings = async () => {
-    setSettingsStatus('saving')
-    setSettingsError('')
-    const res = await requestJson(api + '/config', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        patch: {
-          llm: { provider: settings.provider, model: settings.model },
-          purge: { level: settings.level },
-          forge: {
-            repair: settings.forgeRepair,
-            postprocess: settings.forgePostprocess,
-            poseHints: settings.forgePoseHints,
-            candidates: settings.forgeCandidates,
-          },
-          comfy: {
-            baseUrl: settings.baseUrl,
-            workflowDir: settings.workflowDir,
-            launchDir: settings.launchDir,
-            pythonPath: settings.pythonPath,
-          },
-        },
-      }),
-    })
-    if (!res.ok || res.payload?.ok === false) {
-      setSettingsStatus('error')
-      setSettingsError(res.payload?.message ?? res.message ?? t('settings.failed'))
-      return
-    }
-    setSettingsStatus('saved')
-    setLevel(settings.level)
-    setPurgeInfo(previous => normalizePurge({ ...previous, level: settings.level }))
-    const fresh = await requestJson(api + '/state')
-    if (fresh.ok) {
-      const purge = fresh.payload?.purge
-      if (purge !== null && purge !== undefined && typeof purge === 'object') setPurgeInfo(normalizePurge(purge))
-    }
-  }
-
-  const patchSettings = patch => setSettings(previous => ({ ...previous, ...patch }))
 
   /** 把 /comfy 的响应折成灯的状态；连不上也要给出「为什么」，别只留一个灰点。 */
   const applyComfy = (res) => {
@@ -505,39 +298,10 @@ function Panel(props) {
     }))
   }
 
-  const checkComfy = async () => {
-    setComfyStatus(previous => ({ ...previous, busy: 'check' }))
-    applyComfy(await requestJson(api + '/comfy'))
-  }
-
-  const startComfy = async () => {
-    setComfyStatus(previous => ({ ...previous, busy: 'launch' }))
-    const res = await requestJson(api + '/comfy/launch', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ waitMs: 60000 }),
-    })
-    const payload = res.payload !== null && typeof res.payload === 'object' ? res.payload : {}
-    if (!res.ok || payload.ok === false) {
-      setComfyStatus(previous => ({
-        ...previous,
-        state: 'offline',
-        busy: '',
-        message: String(payload.message ?? res.message ?? t('comfy.launchFailed')),
-        launchDir: String(payload.dir ?? previous.launchDir),
-      }))
-      return
-    }
-    setComfyStatus(previous => ({
-      ...previous,
-      state: payload.state === 'online' ? 'online' : 'starting',
-      version: String(payload.status?.version ?? previous.version),
-      message: String(payload.message ?? ''),
-      launchDir: String(payload.dir ?? previous.launchDir),
-      command: String(payload.command ?? previous.command),
-      busy: '',
-    }))
-  }
+  const { saveSettings, patchSettings, checkComfy, startComfy } = createSettingsOps({
+    api, t, settings, setSettings, setSettingsStatus, setSettingsError,
+    setComfyStatus, setPurgeInfo, applyLevel, applyComfy,
+  })
   const p = {
     h,
     t,

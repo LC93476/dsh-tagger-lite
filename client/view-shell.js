@@ -1,13 +1,16 @@
 // 面板骨架：把头部状态条、输入区、结果区、设置区拼成一棵树。
+// 输入区自己成模块（client/panel-input.js），骨架只负责按顺序把它拼进来。
 import { CSS } from './css.js'
-import { clampInt } from './state.js'
 import { headViews } from './view-head.js'
+import { inputViews } from './panel-input.js'
 import { settingsViews } from './view-settings.js'
 import { resultViews } from './view-result.js'
 
 export function shell(p) {
-  const { h, t, api, text, setText, standards, setStandards, maxTags, setMaxTags, level, setLevel, workflows, workflowState, workflowError, workflowId, setWorkflowId, forge, result, run, refine, setRefine, runRefine, copyStatus, copyPair, refName, refBusy, refError, positiveText, negativeText, bilingualText, negativePairText, pairLines, settings, settingsStatus, settingsError, patchSettings, saveSettings, comfyStatus, checkComfy, startComfy, purgeInfo, spi, generate, submitRun, removeChip, copyPositive, copyBilingual, pickRef, isRefWorkflow } = p
+  const { h, t, forge, result, run } = p
   const { comfyNode, spiNode, lampNode, workflowOptions, levelSelect } = headViews(p)
+  // 下拉与档位选择是 headViews 产出的，输入区要用，所以并进同一份 bag 递过去。
+  const { inputNodes } = inputViews({ ...p, workflowOptions, levelSelect })
   const { resultNode } = resultViews(p)
   const { settingsNode } = settingsViews(p)
   const body = forge.status === 'forging'
@@ -31,84 +34,7 @@ export function shell(p) {
       h('div', { key: 'tags', class: 'ptf-head-tags' }, comfyNode, spiNode, lampNode),
     ),
   ),
-  h('section', { key: 'input', class: 'ptf-section' },
-    h('label', { key: 'label', class: 'ptf-label', htmlFor: 'ptf-text' }, t('label.input')),
-    h('textarea', {
-      key: 'textarea',
-      id: 'ptf-text',
-      class: 'ptf-textarea',
-      rows: 4,
-      placeholder: t('placeholder.input'),
-      value: text,
-      'data-testid': 'ptf-text',
-      onChange: event => setText(event.target.value),
-    }),
-  ),
-  h('div', { key: 'options', class: 'ptf-opts' },
-    h('label', { key: 'wd', class: 'ptf-check' },
-      h('input', {
-        key: 'input',
-        type: 'checkbox',
-        checked: standards.wd,
-        'data-testid': 'ptf-standard-wd',
-        onChange: () => setStandards({ ...standards, wd: !standards.wd }),
-      }),
-      h('span', { key: 'text' }, t('standard.wd')),
-    ),
-    h('label', { key: 'camie', class: 'ptf-check' },
-      h('input', {
-        key: 'input',
-        type: 'checkbox',
-        checked: standards.camie,
-        'data-testid': 'ptf-standard-camie',
-        onChange: () => setStandards({ ...standards, camie: !standards.camie }),
-      }),
-      h('span', { key: 'text' }, t('standard.camie')),
-    ),
-    h('label', { key: 'max', class: 'ptf-field' },
-      h('span', { key: 'label' }, t('maxTags')),
-      h('input', {
-        key: 'input',
-        type: 'number',
-        min: 8,
-        max: 160,
-        class: 'ptf-number',
-        value: maxTags,
-        'data-testid': 'ptf-maxtags',
-        onChange: event => setMaxTags(clampInt(event.target.value, 8, 160, 40)),
-      }),
-    ),
-    h('label', { key: 'workflow', class: 'ptf-field ptf-field-wide' },
-      h('span', { key: 'label' }, t('workflow')),
-      h('select', {
-        key: 'select',
-        class: 'ptf-select',
-        value: workflowId,
-        'data-testid': 'ptf-workflow',
-        onChange: event => setWorkflowId(event.target.value),
-      }, workflowOptions),
-    ),
-    h('label', { key: 'level', class: 'ptf-field' },
-      h('span', { key: 'label' }, t('level')),
-      levelSelect(setLevel),
-    ),
-  ),
-  workflowState === 'loading'
-    ? h('div', { key: 'workflow-loading', class: 'ptf-hint', 'data-testid': 'ptf-workflow-loading' }, t('workflow.loading'))
-    : workflowState === 'error'
-      ? h('div', { key: 'workflow-error', class: 'ptf-error', 'data-testid': 'ptf-workflow-error' }, t('workflow.error') + ': ' + workflowError)
-      : null,
-  h('div', { key: 'actions', class: 'ptf-actions' },
-    h('button', {
-      key: 'generate',
-      type: 'button',
-      class: 'ptf-primary',
-      'data-testid': 'ptf-generate',
-      disabled: forge.status === 'forging' || text.trim() === '',
-      onClick: generate,
-    }, forge.status === 'forging' ? t('action.generating') : t('action.generate')),
-  ),
-  forge.error !== '' ? h('div', { key: 'error', class: 'ptf-error', 'data-testid': 'ptf-error' }, t('error.forge') + ': ' + forge.error) : null,
+  ...inputNodes,
   body,
   settingsNode,
   )

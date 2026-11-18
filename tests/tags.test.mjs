@@ -15,6 +15,7 @@ import path from 'node:path'
 import { after, test } from 'node:test'
 import { fileURLToPath } from 'node:url'
 import tagsEntry, * as tagsNs from '../lib/tags.js'
+import * as matcherNs from '../lib/tags/matcher.js'
 import { createTagIndex, escapeParens, parseTerm, resetTagIndexCache, unescapeTag } from '../lib/tags.js'
 import { runNormalize, summaryToJson, summaryToText } from '../scripts/build-tags.mjs'
 
@@ -380,6 +381,38 @@ test('拆分体积：lib/tags.js 是薄入口（< 8KB），子模块各自 < 30K
     assert.ok(size > 0, file + ' 不存在')
     assert.ok(size < 30 * 1024, name + ' 超过 30KB：' + size)
   }
+})
+
+// matcher 拆分后的护栏：门面导出面与拆分前完全一致（4 个键），实现文件各自 < 30KB。
+// 后续再拆子模块时，漏导出/多导出一个 key 都会在这里被拦住——外部契约只认这 4 个。
+test('门面导出面快照：lib/tags/matcher.js 仍只出 4 个键，子模块各自 < 30KB', async () => {
+  assert.deepEqual(Object.keys(matcherNs).sort(), ['createMatcher', 'parseTerm', 'splitTopLevel', 'wrapsWhole'])
+
+  // 拆分前 lib/tags/matcher.js 是 25815 字节，现在只剩转发，必须明显更薄
+  const facadeFile = path.join(repoRoot, 'lib', 'tags', 'matcher.js')
+  const facadeSize = fs.statSync(facadeFile).size
+  assert.ok(facadeSize > 0, 'lib/tags/matcher.js 不存在')
+  assert.ok(facadeSize < 8 * 1024, 'lib/tags/matcher.js 应只剩转发，实际 ' + facadeSize + ' 字节')
+
+  const matcherDir = path.join(repoRoot, 'lib', 'tags', 'matcher')
+  const files = fs.readdirSync(matcherDir).filter(name => name.endsWith('.js')).sort()
+  assert.deepEqual(files, ['exact.js', 'filter.js', 'format.js', 'index.js', 'parse.js', 'score.js'])
+  for (const name of files) {
+    const size = fs.statSync(path.join(matcherDir, name)).size
+    assert.ok(size > 0, name + ' 是空文件')
+    assert.ok(size < 30 * 1024, 'lib/tags/matcher/' + name + ' 超过 30KB：' + size)
+  }
+
+  // createMatcher 返回的方法一个都不能少：编排层重组时最容易漏掉某个方法名
+  const stub = createTagIndex({ dir: path.join(scratch, 'facade'), probeDefaults: false, logger: silent })
+  await stub.ready()
+  assert.deepEqual(
+    Object.keys(matcherNs.createMatcher({ tags: new Map(), byCount: [], lower: new Map(), lowerKeys: [], aliases: new Map() }, () => {})).sort(),
+    [
+      'canonicalize', 'canonicalizeMany', 'formatTagString', 'get', 'lookup', 'parseTagString',
+      'runQuery', 'search', 'stats', 'suggest', 'suggestTags', 'toRow', 'toStandard',
+    ],
+  )
 })
 
 test('单例：同参数 createTagIndex 复用同一个实例，resetTagIndexCache 后重建', async () => {

@@ -10,13 +10,14 @@
 <body>
 <header>
   <div>
-    <h1>DSh Tagger · 锻造台</h1>
-    <div class="sub">白话 → WD + Camie 标签 → 二次精修 → 直接出图。负向与画质词由 ComfyUI 工作流内置。</div>
+    <h1 id="app-title">DSh Tagger · 锻造台</h1>
+    <div id="app-sub" class="sub">白话 → WD + Camie 标签 → 二次精修 → 直接出图。负向与画质词由 ComfyUI 工作流内置。</div>
   </div>
   <div class="badges">
     <span class="pill lamp" id="lamp" data-level="full" data-enabled="on" title="破甲状态"><i></i><b>破甲</b> <span id="lamp-text">读取中</span></span>
     <span class="pill" id="llm-pill" data-state="warn"><i></i><span id="llm-text">llm 读取中</span></span>
     <span class="pill" id="comfy-pill" data-state="warn"><i></i><span id="comfy-text">ComfyUI 读取中</span></span>
+    <select id="lang" title="语言"><option value="zh">中文</option><option value="en">English</option></select>
   </div>
 </header>
 <main>
@@ -41,7 +42,7 @@
     <div class="row"><button id="comfy-save" class="primary">保存 ComfyUI</button><button id="comfy-ping" class="ghost">检测连通</button><button id="comfy-launch" class="ghost">启动 ComfyUI</button><span class="hint" id="comfy-status" style="margin:0"></span></div>
   </details>
   <section class="card">
-    <div class="row between" style="margin-top:0"><h2 style="margin:0">白话描述</h2><span class="hint" id="forge-status" style="margin:0"></span></div>
+    <div class="row between" style="margin-top:0"><h2 id="forge-title" style="margin:0">白话描述</h2><span class="hint" id="forge-status" style="margin:0"></span></div>
     <textarea id="text" rows="4" placeholder="例：室内夜晚，裸体少女躺在床边回头看镜头，紫瞳黑长发，油亮皮肤，柔和暖光"></textarea>
     <div class="row">
       <label>最多标签 <input id="maxTags" type="number" min="8" max="160" value="40"></label>
@@ -127,10 +128,13 @@
     <div class="hint" id="pose-count"></div>
   </div>
 </div>
-<!-- 依赖顺序：api（BASE + fetch）→ state（state + 表单读写）→ render（状态灯 / 结果卡 / 错误码表）
-     → settings（设置表单 / 工作流下拉 / ComfyUI 探活）→ history（轮询预览 / 参考图 / 姿势弹窗 / 参数记忆）
-     → app（只做编排：boot + 三个动作 + 事件绑定，末尾自启）。全部是普通 script，共享全局，末尾的 app.js 必须最后加载。 -->
+<!-- 依赖顺序：api（BASE + fetch）→ i18n（字典 + T + 静态文案回填 + 语言选择）→ state（state + 表单读写）
+     → render（状态灯 / 结果卡 / 错误码表）→ settings（设置表单 / 工作流下拉 / ComfyUI 探活）
+     → history（轮询预览 / 参考图 / 姿势弹窗 / 参数记忆）
+     → app（只做编排：boot + 三个动作 + 事件绑定，末尾自启）。全部是普通 script，共享全局，末尾的 app.js 必须最后加载。
+     界面文案由 i18n.js 的 T() 从字典取（GET /locale?lang=zh|en），HTML 里这几句中文只是「脚本没跑起来」时的兜底。 -->
 <script src="/public/api.js"></script>
+<script src="/public/i18n.js"></script>
 <script src="/public/state.js"></script>
 <script src="/public/render.js"></script>
 <script src="/public/settings.js"></script>
