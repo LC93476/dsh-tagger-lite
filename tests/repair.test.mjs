@@ -16,6 +16,7 @@ import path from 'node:path'
 import { test } from 'node:test'
 import { createRepairer } from '../lib/repair.js'
 import { createTagIndex, suggestTags as modSuggest } from '../lib/tags.js'
+import { requireRealLibrary } from './_lib-guard.mjs'
 
 const silent = { info() {}, warn() {}, error() {} }
 const scratch = path.join(os.tmpdir(), 'dsh-prompt-forge-repair-test-' + process.pid)
@@ -85,7 +86,9 @@ test("空白写法由 canonicalize 自己解决（'silver hair'），repair 不�
   assert.equal(out.rows[0].tag, 'silver_hair')
 })
 
-test('只动 matched=false：已经命中的 legs_up / spread_leg / blue_eyes 原样不动', async () => {
+test('只动 matched=false：已经命中的 legs_up / spread_leg / blue_eyes 原样不动', async (t) => {
+  // 这条要求这三个词真的在库里（CI 上只有 seed 时会全部 unmatched），没真库就跳过
+  if (!requireRealLibrary(t, tags)) return
   const rows = rowsOf(['legs_up', 'spread_leg', 'blue_eyes'])
   assert.deepEqual(rows.map(r => r.matched), [true, true, true], '前置条件：这三个本来就能命中')
   const out = await repairer.fix(rows)

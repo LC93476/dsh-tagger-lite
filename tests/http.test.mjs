@@ -14,6 +14,7 @@ import test from 'node:test'
 
 import { createHandlers, createRuntime } from '../index.js'
 import { createDispatch, LEGACY_PREFIX, PREFIX } from '../lib/routes.js'
+import { requireRealLibrary } from './_lib-guard.mjs'
 
 // 数据目录隔离：POST /config 会写 settings.json，不能污染用户真实配置。
 const SANDBOX_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-http-'))

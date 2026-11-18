@@ -15,6 +15,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { test } from 'node:test'
 import { createTagIndex } from '../lib/tags.js'
+import { requireRealLibrary } from './_lib-guard.mjs'
 import {
   BUCKET_INDEX,
   BUCKETS,
@@ -263,8 +264,10 @@ test('formatRows：plain 不带括号，comfy 带权重；给了 tags 实例就�
   assert.equal(formatRows([{ tag: 'name_(series)', weight: 1 }], { syntax: 'plain' }), 'name_' + BS + '(series' + BS + ')')
 })
 
-test('与真库对齐：收拾完留下来的每一个词都是库里 matched 的真词', async () => {
+test('与真库对齐：收拾完留下来的每一个词都是库里 matched 的真词', async (t) => {
   await live.ready()
+  // 没有 Danbooru 大词表（CI / 干净机器）时，这条真库用例没有意义，跳过
+  if (!requireRealLibrary(t, live)) return
   const raw = [
     '1girl', 'lying', 'on_back', 'profile', 'from_side', 'school_uniform',
     'close-up', 'long_hair', 'best_quality', 'on_bed', 'night', 'blush',
