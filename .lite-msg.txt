@@ -1,0 +1,5 @@
+chore: 同步源码 9cd4440（/_mod 路径修复）
+
+- lib/cordis/handlers.js: /_mod 读 client/ 退两级，子模块不再 404。
+- tests/http.test.mjs: /_mod 用例补真模块 200 断言。
+- 去掉误入库的 .commit-msg.txt。

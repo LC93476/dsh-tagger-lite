@@ -556,6 +556,13 @@ test('GET /_mod/*：只吐 client/ 下一层的 js 模块，坏名字 400、缺�
       assert.equal(body.error, 'bad-module')
     }
 
+    // 名字合法且文件存在：真能读到 client/ 下的模块（光测 400/404 会漏掉解析路径写错的情况）
+    const okRes = await fetch(base + '/_mod/client/api.js')
+    assert.equal(okRes.status, 200)
+    assert.equal(okRes.headers.get('content-type'), 'text/javascript; charset=utf-8')
+    const okSource = await okRes.text()
+    assert.match(okSource, /export (?:async )?function requestJson/)
+
     // 名字合法但文件不存在：404 且不吐堆栈
     const missing = await getJson(base + '/_mod/client/zzz-no-such-module.js')
     assert.equal(missing.status, 404)

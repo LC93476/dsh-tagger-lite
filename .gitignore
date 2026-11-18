@@ -14,6 +14,7 @@ desktop.ini
 # 临时目录
 tmp/
 .tmp-*
+.commit-msg.txt
 
 # MSYS 里偶尔冒出来的 Windows 设备名占位文件
 /CON
