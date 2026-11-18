@@ -43,4 +43,13 @@ jobs:
           # 真机 ComfyUI 用例靠这个变量跳过；CI 上没有 ComfyUI
           DSH_TAGGER_NO_COMFY: "1"
         # npm test = scripts/run-tests.mjs：串行跑（几个套件会读写同一份词表目录，并行会互相踩）
-        run: npm test
+        # 失败时把失败用例名与断言贴到日志末尾：Actions 的日志查看器是虚拟化的，
+        # 中段的 not ok 往往翻不到，末尾这几行才是能直接看到的部分。
+        run: |
+          set +e
+          npm test 2>&1 | tee test-out.txt
+          code=${PIPESTATUS[0]}
+          echo "test-exit=$code"
+          grep -n -A 22 "^not ok" test-out.txt | head -90
+          tail -12 test-out.txt
+          exit $code

@@ -1,0 +1,10 @@
+# 工作区一律 LF，避免 CRLF 影响测试里按行切分的断言；Windows 脚本保持 CRLF 才能双击。
+* text=auto eol=lf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+*.vbs text eol=crlf
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.ico binary

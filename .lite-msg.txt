@@ -1,6 +1,0 @@
-chore: 同步源码 697a29c（Phase 9/10 收尾精修）
-
-- client/panel.js 拆输入/动作/出图/设置四个子模块（15094B）。
-- lib/tags/matcher.js 拆成门面 + 六个内聚子模块。
-- server/shims.mjs 收薄到纯生命周期垫片，实现在 lib/cordis/host.js。
-- 新增 GET /locale 双语字典，桌面面板可切中英。

@@ -288,7 +288,11 @@ test('standalone：health / spi / spi.version / 根路径 HTML 都能对外提�
     // 界面文案一律走字典：public 脚本去掉注释后不许再有中文字符（唯一例外是 i18n.js 里的内置字典）
     for (const p of publicFiles) {
       if (p === '/public/i18n.js') continue
+      // 先统一换行再剥注释：CI 的 Windows 检出可能是 CRLF，而 `//.*$` 里的 `.` 不吃 `\r`，
+      // 会在行尾留一个 \r 让 `$` 失配 —— 注释整行剥不掉、假报「硬编码中文」。
       const code = src[p]
+        .split(/\r?\n/)
+        .join('\n')
         .replace(/\/\*[\s\S]*?\*\//g, ' ')
         .split('\n')
         .map(line => line.replace(/(^|\s)\/\/.*$/, '$1'))
