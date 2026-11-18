@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DSh Tagger · 锻造台</title>
+<!-- 静态资源由 standalone 的 /public/* 提供（带 MIME 与路径穿越防护）；样式与脚本都在 server/public/ 下，改完刷新即可 -->
+<link rel="stylesheet" href="/public/panel.css">
+</head>
+<body>
+<header>
+  <div>
+    <h1>DSh Tagger · 锻造台</h1>
+    <div class="sub">白话 → WD + Camie 标签 → 二次精修 → 直接出图。负向与画质词由 ComfyUI 工作流内置。</div>
+  </div>
+  <div class="badges">
+    <span class="pill lamp" id="lamp" data-level="full" data-enabled="on" title="破甲状态"><i></i><b>破甲</b> <span id="lamp-text">读取中</span></span>
+    <span class="pill" id="llm-pill" data-state="warn"><i></i><span id="llm-text">llm 读取中</span></span>
+    <span class="pill" id="comfy-pill" data-state="warn"><i></i><span id="comfy-text">ComfyUI 读取中</span></span>
+  </div>
+</header>
+<main>
+  <details class="card" id="settings-card" open>
+    <summary>接口设置（模型 API 与 ComfyUI 连接）</summary>
+    <div class="hint">填完点保存写进 settings.json，<b>立刻生效</b>，不用重启。DSH 面板里不用填这些 —— 那边走宿主的模型服务。</div>
+    <div class="grid2">
+      <label class="wide">接口地址（OpenAI 兼容，可带 /v1）<input id="llm-baseurl" placeholder="https://api.openai.com/v1" spellcheck="false"></label>
+      <label class="wide">API Key<input id="llm-key" type="password" placeholder="没配过就粘进来；已经配过留空表示不改" spellcheck="false" autocomplete="off"></label>
+      <label>模型名<input id="llm-model" placeholder="deepseek-v4.1-flash" spellcheck="false"></label>
+      <label>provider 名<input id="llm-provider" placeholder="openai-compatible" spellcheck="false"></label>
+    </div>
+    <div class="row"><button id="llm-save" class="primary">保存接口</button><button id="llm-test" class="ghost">测试连接</button><span class="hint" id="llm-status" style="margin:0"></span></div>
+    <hr class="sep">
+    <div class="grid2">
+      <label class="wide">ComfyUI 地址<input id="comfy-baseurl" placeholder="http://127.0.0.1:8188" spellcheck="false"></label>
+      <label class="wide">安装目录（点「启动 ComfyUI」用的工作目录）<input id="comfy-dir" placeholder="D:\QUARK\ComfyUI-aki-v3.2\ComfyUI" spellcheck="false"></label>
+      <label class="wide">python 路径<input id="comfy-python" placeholder="D:\QUARK\ComfyUI-aki-v3.2\python\python.exe" spellcheck="false"></label>
+      <label class="wide">工作流模板目录<input id="comfy-workflows" placeholder="C:\Users\你\.dsh-comfyui-workbench\workflows" spellcheck="false"></label>
+      <label>默认工作流 id<input id="comfy-default" placeholder="feiyue-sam3-posetags" spellcheck="false"></label>
+    </div>
+    <div class="row"><button id="comfy-save" class="primary">保存 ComfyUI</button><button id="comfy-ping" class="ghost">检测连通</button><button id="comfy-launch" class="ghost">启动 ComfyUI</button><span class="hint" id="comfy-status" style="margin:0"></span></div>
+  </details>
+  <section class="card">
+    <div class="row between" style="margin-top:0"><h2 style="margin:0">白话描述</h2><span class="hint" id="forge-status" style="margin:0"></span></div>
+    <textarea id="text" rows="4" placeholder="例：室内夜晚，裸体少女躺在床边回头看镜头，紫瞳黑长发，油亮皮肤，柔和暖光"></textarea>
+    <div class="row">
+      <label>最多标签 <input id="maxTags" type="number" min="8" max="160" value="40"></label>
+      <label>破甲档 <select id="level">
+        <option value="off">off</option><option value="light">light</option>
+        <option value="standard">standard</option><option value="full">full</option>
+        <option value="max">max</option>
+      </select></label>
+      <button id="save-level" class="ghost">应用档位</button>
+      <label title="库里查不到的多词会被改成连字符/撇号写法">词形修复 <input id="fg-repair" type="checkbox" checked></label>
+      <label title="去重、上位词降权、按 13 段稳定排序">去重合序 <input id="fg-postprocess" type="checkbox" checked></label>
+      <label title="白话里点到的姿势/视角，直接从本地词库补进来">姿势补全 <input id="fg-posehints" type="checkbox" checked></label>
+      <label title="锻造前先从词库捞一批真词喂给模型">候选注入 <input id="fg-candidates" type="checkbox" checked></label>
+      <span class="grow"></span>
+      <button id="forge" class="primary">锻造</button>
+    </div>
+  </section>
+  <section class="card" id="result-card" hidden>
+    <div class="row between" style="margin-top:0"><h2 style="margin:0">中英对照 · 带权重</h2><button id="copy-pair" class="ghost">复制</button></div>
+    <textarea id="pairs" class="mono" rows="8" readonly spellcheck="false"></textarea>
+    <div class="row between"><h2 style="margin:0">正向串（投给 ComfyUI 的就是这份）</h2><button id="copy-pos" class="ghost">复制</button></div>
+    <textarea id="positive" class="mono" rows="3" spellcheck="false"></textarea>
+    <div class="chips" id="chips"></div>
+    <div class="hint" id="pipeline"></div>
+    <div class="hint" id="notes"></div>
+  </section>
+  <section class="card" id="refine-card" hidden>
+    <h2>二次精修（不需要重打白话）</h2>
+    <div class="row" style="margin-top:0">
+      <select id="refine-mode">
+        <option value="add">add · 只加</option>
+        <option value="edit">edit · 加与删</option>
+        <option value="prune">prune · 只删</option>
+        <option value="weights">weights · 只调权重</option>
+      </select>
+      <input id="refine-text" class="grow" placeholder="例：加夜景与逆光，胸口再露一点 / 去掉多余的手 / 主体权重提到 1.2">
+      <button id="refine" class="primary">精修</button>
+    </div>
+    <div class="hint" id="refine-status"></div>
+    <div class="delta" id="refine-delta"></div>
+  </section>
+  <section class="card" id="gen-card">
+    <h2>出图</h2>
+    <div class="row" style="margin-top:0">
+      <select id="workflow" class="grow"></select>
+    </div>
+    <div class="row" id="ref-row">
+      <label class="grow">参考图（任意照片/线稿，走 DepthAnythingV2 → ControlNet）
+        <input id="ref-file" type="file" accept="image/png,image/jpeg,image/webp">
+      </label>
+      <img id="ref-preview" alt="" style="display:none;width:64px;height:auto;border-radius:6px;border:1px solid var(--line, #333)">
+    </div>
+    <div class="hint" id="ref-status"></div>
+    <div class="row">
+      <button id="pose-btn" class="pose-card" type="button" style="flex:1">
+        <img id="pose-thumb" alt="" hidden>
+        <span class="pt"><b id="pose-name">还没有选姿势</b><span id="pose-meta">点这里按缩略图挑</span></span>
+      </button>
+      <label>CN 强度 <input id="cnstrength" type="number" value="0.38" step="0.01" min="0" max="1.5" style="width:80px"></label>
+    </div>
+    <select id="pose" hidden></select>
+    <div class="row">
+      <label>宽 <input id="width" type="number" value="1200" step="64"></label>
+      <label>高 <input id="height" type="number" value="1800" step="64"></label>
+      <label>seed <input id="seed" type="number" value="20261108" style="width:120px"></label>
+      <label>步数 <input id="steps" type="number" value="30"></label>
+      <label>cfg <input id="cfg" type="number" value="5.03" step="0.01" style="width:74px"></label>
+      <button id="run" class="primary">出图</button>
+    </div>
+    <div class="hint" id="gen-status"></div>
+    <div class="images" id="images"></div>
+  </section>
+</main>
+<div class="modal" id="pose-modal" hidden>
+  <div class="modal-box">
+    <div class="modal-head">
+      <b>选姿势 · 缩略图对照</b>
+      <input id="pose-q" class="grow" placeholder="搜中文名 / 编号 P016 / 分类（坐姿、趴卧、跪立…）" style="flex:1">
+      <button id="pose-close" type="button">关闭</button>
+    </div>
+    <div class="sets" id="pose-sets"></div>
+    <div class="modal-grid" id="pose-grid"></div>
+    <div class="hint" id="pose-count"></div>
+  </div>
+</div>
+<!-- 依赖顺序：api（BASE + fetch）→ state（state + 表单读写）→ app（渲染 + 事件，末尾自启 boot） -->
+<script src="/public/api.js"></script>
+<script src="/public/state.js"></script>
+<script src="/public/app.js"></script>
+</body>
+</html>

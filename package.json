@@ -1,0 +1,54 @@
+{
+  "name": "dsh-tagger",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "DSh Tagger：白话 → WD + Camie 标签 → ComfyUI，带二次 AI 精修与扩展接口（桌面端优先）",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./spi": "./lib/spi.js",
+    "./server": "./server/standalone.mjs",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg",
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "dsh-tagger-server": "./server/standalone.mjs"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "lib",
+    "server",
+    "data",
+    "locale/*.json",
+    "icon.svg",
+    "cordis.patch.yml",
+    "README.md",
+    "docs"
+  ],
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "serve": "node server/standalone.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-slots"
+      ]
+    }
+  },
+  "meta": {
+    "title": "DSh Tagger",
+    "description": "白话描述直接锻造成 WD + Camie 标签并投递 ComfyUI；锻造完还能让 AI 二次增删，扩展接口留给其他插件与 web 版。"
+  }
+}
