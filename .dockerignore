@@ -1,0 +1,19 @@
+# plan: 构建上下文里不要的东西（镜像只需要源码 + 词表 + 静态资源）
+.git
+.github
+node_modules
+dist
+tmp
+tests
+tools
+public-src
+scripts
+data/*.log
+*.log
+.tmp-*
+*.msg.txt
+tagger.env.cmd
+settings.json
+.data
+.runtime
+CON

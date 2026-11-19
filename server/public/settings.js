@@ -143,3 +143,102 @@ async function launchComfy() {
     setStatus("comfy-status", T("ui.comfy.launchFailed", { text: errText(d, res.status) }), true);
   }
 }
+// ── 导入自定义工作流 ────────────────────────────────────────────────────────
+// 收 1 份工作流 JSON（必须 API 格式）+ 可选 1 份 schema；服务端落到 comfy.workflowDir。
+// 判断「这份文件是工作流还是 schema」只看形状：有 class_type 节点的是工作流，带 vars 的是 schema。
+var wfImport = { workflow: null, schema: null };
+
+/** 文件名 → 合法模板 id（与 lib/workflow-import.js 的 slugify 同一套规则）。 */
+function slugName(raw) {
+  return String(raw || "").trim().toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "-")
+    .replace(/-{2,}/g, "-")
+    .replace(/^[-_]+|[-_]+$/g, "")
+    .slice(0, 64);
+}
+
+/** 形状判定：workflow（API 格式）/ schema / ui（界面格式，拒）/ bad。 */
+function classifyWfFile(text) {
+  var v;
+  try { v = JSON.parse(text) } catch (e) { return "bad" }
+  if (!v || typeof v !== "object" || Array.isArray(v)) return "bad";
+  if (Array.isArray(v.nodes)) return "ui";
+  var keys = Object.keys(v);
+  for (var i = 0; i < keys.length; i++) {
+    var node = v[keys[i]];
+    if (node && typeof node === "object" && typeof node.class_type === "string") return "workflow";
+  }
+  return "schema";
+}
+
+function readFileText(file) {
+  return new Promise(function (resolve, reject) {
+    var reader = new FileReader();
+    reader.onload = function () { resolve(String(reader.result || "")) };
+    reader.onerror = function () { reject(new Error("read-failed")) };
+    reader.readAsText(file);
+  });
+}
+
+function wfSetStatus(text, bad) { setStatus("wf-status", text, bad); }
+
+/** 选文件：工作流进 wfImport.workflow，schema 进 wfImport.schema；id 没填就从文件名推。 */
+async function pickWorkflowFiles(event) {
+  var files = Array.prototype.slice.call(event.target.files || []);
+  if (!files.length) return;
+  wfImport.workflow = null;
+  wfImport.schema = null;
+  var schemaName = "";
+  wfSetStatus(T("ui.wfImport.reading"), false);
+  for (var i = 0; i < files.length; i++) {
+    var file = files[i];
+    var text = "";
+    try { text = await readFileText(file) } catch (e) {
+      wfSetStatus(T("ui.wfImport.failed", { text: errText({ error: "no-file" }, 0) }), true);
+      return;
+    }
+    var kind = classifyWfFile(text);
+    if (kind === "workflow") {
+      wfImport.workflow = text;
+      if (!$("wf-name").value.trim()) $("wf-name").value = slugName(file.name.replace(/\.json$/i, ""));
+    } else if (kind === "schema") {
+      wfImport.schema = text;
+      schemaName = file.name;
+    } else if (kind === "ui") {
+      wfSetStatus(T("ui.wfImport.failed", { text: T("err.ui-format") }), true);
+      return;
+    } else {
+      wfSetStatus(T("ui.wfImport.failed", { text: T("err.bad-json") }), true);
+      return;
+    }
+  }
+  if (!wfImport.workflow) { wfSetStatus(T("ui.wfImport.noFile"), true); return; }
+  var parts = [];
+  parts.push($("wf-name").value.trim() || "workflow");
+  if (schemaName) parts.push(T("ui.wfImport.schemaPicked", { name: schemaName }));
+  wfSetStatus(parts.filter(Boolean).join(" · "), false);
+}
+
+/** 提交导入 → 成功就刷新下拉并选中新模板。 */
+async function doWorkflowImport() {
+  if (!wfImport.workflow) { wfSetStatus(T("ui.wfImport.noFile"), true); return; }
+  var name = slugName($("wf-name").value);
+  if (!name) { wfSetStatus(T("ui.wfImport.needName"), true); return; }
+  wfSetStatus(T("ui.wfImport.importing"), false);
+  var body = { name: name, workflow: wfImport.workflow, overwrite: $("wf-overwrite").checked === true };
+  if (wfImport.schema) body.schema = wfImport.schema;
+  var res = await api("/workflows/import", { method: "POST", body: JSON.stringify(body) });
+  var d = res.data || {};
+  if (d.ok !== true) { wfSetStatus(T("ui.wfImport.failed", { text: errText(d, res.status) }), true); return; }
+  // 导入接口已经把刷新后的列表一起回了，不用再单独打一次 /workflows
+  var payload = Array.isArray(d.workflows) ? { workflows: d.workflows } : {};
+  if (!Array.isArray(payload.workflows)) {
+    wfSetStatus(T("ui.wfImport.reloadFailed", { text: errText(d, res.status) }), true);
+    return;
+  }
+  fillWorkflows(payload.workflows, d.id);
+  var n = 0;
+  payload.workflows.forEach(function (w) { if (w.id === d.id && Array.isArray(w.vars)) n = w.vars.length });
+  wfSetStatus(n > 0 ? T("ui.wfImport.ok", { id: d.id, title: d.title, n: n }) : T("ui.wfImport.okNoVars", { id: d.id, title: d.title }), false);
+  saveUi();
+}

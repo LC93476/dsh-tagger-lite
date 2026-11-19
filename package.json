@@ -35,7 +35,8 @@
     "check:tags": "node scripts/check-tags.mjs",
     "bench": "node scripts/bench.mjs",
     "check": "npm run check:tags && npm run typecheck && npm test",
-    "serve": "node server/standalone.mjs"
+    "serve": "node server/standalone.mjs",
+    "pack": "node scripts/pack.mjs"
   },
   "engines": {
     "node": ">=18.18.0"

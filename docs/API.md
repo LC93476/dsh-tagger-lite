@@ -18,6 +18,7 @@
 | POST | `/forge` | 白话 → 标签：body `{ text, options }` |
 | POST | `/refine` | 二次精修：body `{ positive, negative, instruction, mode, options }` |
 | GET | `/workflows` | 模板列表 `{ workflows, dir }` |
+| POST | `/workflows/import` | 导入自定义工作流：body `{ name, workflow, schema?, overwrite? }`（`workflow` 可以是对象或 JSON 字符串，`schema` 可省；也可以用 `{ path }` 直接给磁盘上的 json 文件）→ `{ ok, id, title, dir, workflowPath, schemaPath, nodes, created, workflows }`；只收 API 格式，UI 格式回 400 `ui-format`，同名回 409 `exists` |
 | POST | `/run` | 投递出图：body `{ workflowId, positive, negative, vars }` |
 | POST | `/upload` | 参考图落进 ComfyUI 的 `input/`：body `{ filename, data }`（`data` 可带 `data:image/png;base64,` 前缀）→ `{ ok, name, bytes, dir }` |
 | GET | `/poses` | 姿势目录（读 ai-pose-gallery-zh 的 catalog.csv）：`?set=sexy&q=侧坐&limit=40` |
@@ -164,6 +165,37 @@ curl -s http://127.0.0.1:PORT/tagger/api/run \
   -d '{"workflowId":"feiyue-sam3-pose","positive":"1girl, solo, sitting","vars":{"pose":"full_sexy_P016_diag","cnStrength":0.38}}'
 ```
 
+### 导入自定义工作流（`POST /workflows/import`）
+
+面板设置区「导入自定义工作流」走这条：选一份 ComfyUI 里用 **工作流 → 导出（API）/ Save (API Format)** 存出来的 JSON，
+可选再顺带选一份 `<id>.schema.json`。服务端校验形状 → 取 id → 补 schema（没给就按节点输入反推变量表）→ 原子写进 `comfy.workflowDir`。
+
+```bash
+# 直接贴 JSON（schema 省略时自动反推变量）
+curl -s -X POST http://127.0.0.1:7789/tagger/api/workflows/import \
+  -H "Content-Type: application/json" \
+  -d '{"name":"my-sdxl-t2i","workflow":{"3":{"class_type":"KSampler","inputs":{"seed":1}}}'}
+
+# 独立服务在本机时也可以直接指磁盘文件（省掉浏览器读文件那一步）
+curl -s -X POST http://127.0.0.1:7789/tagger/api/workflows/import \
+  -H "Content-Type: application/json" \
+  -d '{"name":"my-sdxl-t2i","path":"D:/Somewhere/workflow_api.json","overwrite":true}'
+```
+
+返回 `{ ok: true, id, title, dir, workflowPath, schemaPath, nodes, created, workflows }` —— 末尾 `workflows` 是导入后的完整列表，
+面板直接拿它刷新下拉，不必再打一次 `/workflows`。
+
+拒绝口径（都 4xx，且一个字节都不落盘）：
+
+| 情况 | 状态码 | `error` |
+| --- | --- | --- |
+| 不是合法 JSON | 400 | `bad-json` |
+| UI 格式（带 `nodes`/`links`） | 400 | `ui-format` |
+| 没有带 `class_type` 的节点 | 400 | `bad-workflow` |
+| id 折叠后为空（比如纯中文名） | 400 | `bad-name` |
+| `schema.vars` 不是数组 | 400 | `bad-schema` |
+| 同名模板已存在且没给 `overwrite` | 409 | `exists` |
+| 模板目录读不了 / 写不了 | 400 | `no-workflow-dir` / `write-failed` |
 ### 参考图类模板：`feiyue-sam3-ref`
 
 > Web 面板与 DSH 面板里，「出图」区与「参考图」行是常显的；工作流下拉中带 `〔参考图〕` 徽标的模板才吃 `vars.image`，选到别的模板时该行置灰并提示切换。

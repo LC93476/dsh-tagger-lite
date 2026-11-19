@@ -599,4 +599,55 @@ test('GET /_mod/*：只吐 client/ 下一层的 js 模块，坏名字 400、缺�
     assert.equal(health.status, 200)
   })
 })
+test('POST /workflows/import：导入 API 格式工作流后立刻出现在 /workflows，脏输入 4xx 不落盘', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-http-wf-'))
+  const workflow = {
+    '3': { class_type: 'KSampler', inputs: { seed: 7, steps: 24, cfg: 4.5, model: ['4', 0], positive: ['6', 0], negative: ['7', 0], latent_image: ['13', 0] } },
+    '6': { class_type: 'CLIPTextEncode', inputs: { text: 'a', clip: ['5', 0] }, _meta: { title: '正向提示词' } },
+    '7': { class_type: 'CLIPTextEncode', inputs: { text: 'b', clip: ['5', 0] }, _meta: { title: '负向提示词' } },
+    '13': { class_type: 'EmptyLatentImage', inputs: { width: 1024, height: 1024, batch_size: 1 } },
+  }
+  let base = ''
+  const post = body => getJson(base + '/workflows/import', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  await withServer({ comfy: { workflowDir: dir } }, async ({ base: apiBase }) => {
+    base = apiBase
+    const ok = await post({ name: 'My SDXL T2I', workflow })
+    assert.equal(ok.status, 200)
+    assert.equal(ok.body.ok, true)
+    assert.equal(ok.body.id, 'my-sdxl-t2i')
+    assert.equal(fs.existsSync(path.join(dir, 'my-sdxl-t2i.json')), true)
+    assert.equal(fs.existsSync(path.join(dir, 'my-sdxl-t2i.schema.json')), true)
+    const entry = ok.body.workflows.find(item => item.id === 'my-sdxl-t2i')
+    assert.ok(entry, '导入结果里应该有新模板')
+    assert.ok(Array.isArray(entry.vars) && entry.vars.some(v => v.name === 'width' && v.default === 1024), '缺反推出来的变量表')
+
+    const list = await getJson(base + '/workflows')
+    assert.equal(list.status, 200)
+    assert.ok(list.body.workflows.some(item => item.id === 'my-sdxl-t2i'), '列表里没有新模板')
+
+    const dup = await post({ name: 'my-sdxl-t2i', workflow })
+    assert.equal(dup.status, 409)
+    assert.equal(dup.body.error, 'exists')
+
+    const forced = await post({ name: 'my-sdxl-t2i', workflow, overwrite: true })
+    assert.equal(forced.status, 200)
+    assert.equal(forced.body.ok, true)
+
+    const ui = await post({ name: 'ui-one', workflow: { nodes: [], links: [] } })
+    assert.equal(ui.status, 400)
+    assert.equal(ui.body.error, 'ui-format')
+
+    const noName = await post({ workflow })
+    assert.equal(noName.status, 400)
+    assert.equal(noName.body.error, 'bad-name')
+
+    const wrong = await getJson(base + '/workflows/import')
+    assert.equal(wrong.status, 405)
+    assert.equal(fs.readdirSync(dir).filter(name => name.startsWith('ui')).length, 0, 'UI 格式不该落盘')
+  })
+})
 

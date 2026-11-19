@@ -180,6 +180,8 @@ bind("llm-test", testLlm);
 bind("comfy-save", saveComfy);
 bind("comfy-ping", pingComfy);
 bind("comfy-launch", launchComfy);
+bind("wf-import", doWorkflowImport);
+$("wf-file").addEventListener("change", pickWorkflowFiles);
 // 复制成功提示：1 秒后把按钮文案复原（文案来自字典，切语言后下一次重渲染自然跟上）
 var COPY_TOAST_MS = 1000;
 $("copy-pair").addEventListener("click", function () { navigator.clipboard.writeText($("pairs").value); $("copy-pair").textContent = T("ui.common.copied"); setTimeout(function () { $("copy-pair").textContent = T("ui.common.copy") }, COPY_TOAST_MS) });

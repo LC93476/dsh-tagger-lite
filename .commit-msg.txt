@@ -1,12 +1,12 @@
-refactor(phase9-10): 拆 panel/matcher、/locale 双语、pack 白名单
+一键部署：Docker / compose / 便携 zip + 导入自定义工作流
 
-- client/panel.js 21473B → 15094B：输入区 / panel-input.js，标签与精修动作 / panel-actions.js，
-  出图与参考图 / panel-runs.js，设置与 ComfyUI / panel-settings.js；client.js 零改动。
-- lib/tags/matcher.js 25815B → 995B 门面 + matcher/{parse,exact,score,filter,format,index}.js，
-  导出面仍是 4 个键，新增门面快照用例。
-- server/shims.mjs 22383B → 2215B 纯生命周期垫片，实现正文搬进 lib/cordis/host.js；
-  lib/spi.js 增 SERVICE_KEYS / servicesOf / bindServices / readConfig / saveConfig。
-- 新增 GET /locale?lang=zh|en（{ ok, locale, langs, dict }，读包根 locale/*.json）；
-  桌面端 server/public/i18n.js 接同一份字典，硬编码中文清零，界面可切中英。
-- package.json files 白名单收紧（index.js / client.js / client/ / lib/ / server/ / data/ / locale/ / types/ / icon.svg / README.md），
-  .gitignore 忽略 *.msg.txt；npm pack 102 文件 / 232.2 kB。
+- 新增 Dockerfile（node:22-alpine、非 root、零依赖离线构建、健康检查打 /tagger/api/health）
+- 新增 docker-compose.yml + .env.example（数据卷、restart unless-stopped、host.docker.internal 连宿主 ComfyUI）
+- 新增 deploy.cmd / deploy.sh：本机 node → docker → 便携 node 三级回退；Windows 无运行时自动下便携版
+- 新增 scripts/pack.mjs：零依赖打包（dist/ 目录 + store 方式 zip + MANIFEST 校验清单），
+  默认把 danbooru 全量词表快照（4 个 jsonl，约 19MB）打进 data/danbooru/，--no-tags 可省
+- lib/tags/loader.js 探测包内 data/danbooru，便携包解开即有 99470 词
+- docs/API.md 与 README/INSTALL.md 补导入工作流与一键部署说明
+- 面板：POST /workflows/import + 设置区「导入自定义工作流」（选文件、填 id、覆盖开关），
+  导入响应直接带刷新后的 workflows 列表，面板不再额外打一次 GET /workflows
+- 新增 tests/workflow-import.test.mjs（7 例）与 tests/deploy.test.mjs（8 例）；全量 260 tests / 259 pass / 1 skipped

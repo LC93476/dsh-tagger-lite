@@ -1,0 +1,33 @@
+# plan: 一条命令起 DSh Tagger（docker compose up -d --build）
+# 配置走同目录 .env（或宿主机环境变量），模板见 .env.example。
+services:
+  tagger:
+    build:
+      context: .
+    image: dsh-tagger:0.2.0
+    container_name: dsh-tagger
+    restart: unless-stopped
+    ports:
+      - "${DSH_TAGGER_PORT:-7789}:7789"
+    environment:
+      DSH_TAGGER_BASE_URL: ${DSH_TAGGER_BASE_URL:-}
+      DSH_TAGGER_API_KEY: ${DSH_TAGGER_API_KEY:-}
+      DSH_TAGGER_MODEL: ${DSH_TAGGER_MODEL:-}
+      DSH_TAGGER_WORKFLOW_DIR: ${DSH_TAGGER_WORKFLOW_DIR:-}
+      # 容器里的 ComfyUI 不在容器内时，填宿主机地址（Windows/macOS 用 host.docker.internal）
+      DSH_TAGGER_COMFY_URL: ${DSH_TAGGER_COMFY_URL:-http://host.docker.internal:8188}
+    volumes:
+      - tagger-data:/data
+      # 想让容器直接读写宿主的工作流模板目录，把下面这行取消注释并改路径
+      # - "${DSH_TAGGER_WORKFLOW_DIR_HOST:-./workflows}:/workflows"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O-", "http://127.0.0.1:7789/tagger/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  tagger-data:

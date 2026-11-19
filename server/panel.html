@@ -40,6 +40,12 @@
       <label>默认工作流 id<input id="comfy-default" placeholder="feiyue-sam3-posetags" spellcheck="false"></label>
     </div>
     <div class="row"><button id="comfy-save" class="primary">保存 ComfyUI</button><button id="comfy-ping" class="ghost">检测连通</button><button id="comfy-launch" class="ghost">启动 ComfyUI</button><span class="hint" id="comfy-status" style="margin:0"></span></div>
+    <hr class="sep">
+    <div class="grid2">
+      <label class="wide">导入自定义工作流（ComfyUI 里「导出（API 格式）」的 .json；可再顺带选一份 .schema.json）<input id="wf-file" type="file" accept=".json,application/json" multiple></label>
+      <label>模板 id<input id="wf-name" placeholder="my-sdxl-t2i" spellcheck="false"></label>
+    </div>
+    <div class="row"><button id="wf-import" class="primary">导入到模板目录</button><label title="同名模板已存在时直接覆盖"><input id="wf-overwrite" type="checkbox"> 覆盖同名</label><span class="hint grow" id="wf-status" style="margin:0"></span></div>
   </details>
   <section class="card">
     <div class="row between" style="margin-top:0"><h2 id="forge-title" style="margin:0">白话描述</h2><span class="hint" id="forge-status" style="margin:0"></span></div>
