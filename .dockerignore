@@ -5,7 +5,6 @@ node_modules
 dist
 tmp
 tests
-tools
 public-src
 scripts
 data/*.log

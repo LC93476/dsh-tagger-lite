@@ -3,7 +3,7 @@
  *
  * 干净机器 / CI 上 createTagIndex 只有 seed（540 条），凡是拿真库断言行为的用例
  * 应当 skip 而不是变红：红了说明的是「环境没词库」，不是代码坏了。
- * 本地先跑 scripts/build-tags.mjs 就有真库，这些用例照常执行。
+ * 本地先跑 scripts/tags/build-tags.mjs 就有真库，这些用例照常执行。
  */
 
 /** 低于这个条数就当作「只有 seed」 */
@@ -23,6 +23,6 @@ export function hasRealLibrary(tags) {
 export function requireRealLibrary(t, tags) {
   if (hasRealLibrary(tags)) return true
   const loaded = Number(statsOf(tags)?.loaded ?? 0)
-  t.skip('本机没有 Danbooru 词库（loaded=' + loaded + '），先跑 scripts/build-tags.mjs')
+  t.skip('本机没有 Danbooru 词库（loaded=' + loaded + '），先跑 scripts/tags/build-tags.mjs')
   return false
 }

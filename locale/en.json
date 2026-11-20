@@ -295,7 +295,7 @@
   "err.empty-file": "This file is empty (0 bytes)",
   "err.too-large": "Image is over 24MB — compress it first",
   "err.no-launch-dir": "Fill the ComfyUI install dir (launchDir) in settings, otherwise the server cannot write images",
-  "err.bad-workflow": "Bad workflow template format (UI format must be converted with tools/ui2api.mjs)",
+  "err.bad-workflow": "Bad workflow template format (UI format must be converted with scripts/release/ui2api.mjs)",
   "err.workflow-not-found": "No such workflow template — check the template dir",
   "err.no-workflow": "No usable workflow in the template dir",
   "err.no-prompt-node": "No prompt node found: CLIPTextEncode in the template is unrecognized",

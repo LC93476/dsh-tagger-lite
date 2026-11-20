@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * scripts/suggest-overlay.mjs — 从真实 danbooru 词表里掏出「值得补进 overlay 的词」。
+ * scripts/tags/suggest-overlay.mjs — 从真实 danbooru 词表里掏出「值得补进 overlay 的词」。
  *
  * 为什么需要它：补词表最容易犯的错是凭印象写 tag（写出来库里没有，锻造时被丢弃），
  * 或者补一堆冷门词（postCount 个位数，模型根本没学过）。这个脚本按热度排序，
@@ -8,12 +8,12 @@
  * 与已有中文说明一并带出来 —— 直接照着挑，照抄拼写。
  *
  * 用法：
- *   node scripts/suggest-overlay.mjs                            # general，热度前 300
- *   node scripts/suggest-overlay.mjs --group Pose --limit 120   # 只看姿势分组
- *   node scripts/suggest-overlay.mjs --group Camera --grep view # 视角类
- *   node scripts/suggest-overlay.mjs --kind character --min-count 5000
- *   node scripts/suggest-overlay.mjs --out /tmp/cand.jsonl      # 落成可编辑的行
- *   node scripts/suggest-overlay.mjs --json
+ *   node scripts/tags/suggest-overlay.mjs                            # general，热度前 300
+ *   node scripts/tags/suggest-overlay.mjs --group Pose --limit 120   # 只看姿势分组
+ *   node scripts/tags/suggest-overlay.mjs --group Camera --grep view # 视角类
+ *   node scripts/tags/suggest-overlay.mjs --kind character --min-count 5000
+ *   node scripts/tags/suggest-overlay.mjs --out /tmp/cand.jsonl      # 落成可编辑的行
+ *   node scripts/tags/suggest-overlay.mjs --json
  *
  * 参数：--dir <词表目录> --kind general|character|copyright|artist|all
  *       --group <分组名，子串匹配> --min-count <默认 300> --limit <默认 300>
@@ -25,9 +25,9 @@ import { readFileSync, readdirSync, existsSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { discoverDataDir } from '../lib/tags/loader.js'
+import { discoverDataDir } from '../../lib/tags/loader.js'
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
 const argv = process.argv.slice(2)
 /** @param {string} name */
 function argOf(name) {

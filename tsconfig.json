@@ -25,7 +25,8 @@
     "lib/**/*.js",
     "client/**/*.js",
     "server/**/*.mjs",
-    "tools/**/*.mjs",
+    "bin/**/*.mjs",
+    "scripts/**/*.mjs",
     "tests/**/*.mjs"
   ],
   "exclude": [

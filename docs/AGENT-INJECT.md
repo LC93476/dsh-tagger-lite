@@ -10,7 +10,7 @@
 
 目标目录：TARGET = D:/DSh tagger-lite-lite        # ← 改成实际路径；含空格必须加引号
 私货来源：优先用注入包（本机若有 dist/dsh-tagger-inject-*.zip 或已解压的 inject-private.mjs）；
-         否则用私有仓库 D:/DSh tagger-lite 里的 tools/inject-private.mjs
+         否则用私有仓库 D:/DSh tagger-lite 里的 scripts/release/inject-private.mjs
 
 硬约束（违反算失败）：
 1. 只允许改 TARGET 下的这六份文件：lib/purge.js、lib/postprocess/rules.js、lib/zh-intent.js、
@@ -25,9 +25,9 @@
 ```bash
 ls -d "D:/DSh tagger-lite/dist"/dsh-tagger-inject-*.zip 2>/dev/null
 ls -d "D:/DSh tagger-lite-lite/../dsh-tagger-inject"* 2>/dev/null
-test -f "D:/DSh tagger-lite/tools/inject-private.mjs" && echo PRIVATE_REPO_OK
+test -f "D:/DSh tagger-lite/scripts/release/inject-private.mjs" && echo PRIVATE_REPO_OK
 ```
-把找到的注入脚本绝对路径记为 INJECT（解压出来的 inject-private.mjs 或 tools/inject-private.mjs）。
+把找到的注入脚本绝对路径记为 INJECT（解压出来的 inject-private.mjs 或 scripts/release/inject-private.mjs）。
 两个都没有 → 停止，报告「找不到注入脚本」。
 
 ### 步骤 1：确认 TARGET 是公开版仓库（只读）
@@ -54,7 +54,7 @@ node "INJECT" --dst "TARGET" --verify
 ```
 期望输出：
 - `✓ 注入完成：N 份文件（原文件已备份到 <备份目录>）`
-- 若 TARGET 有 scripts/check-tags.mjs：`词表结构自检通过`，且 `合计 ≥ 198 行`
+- 若 TARGET 有 scripts/tags/check-tags.mjs：`词表结构自检通过`，且 `合计 ≥ 198 行`
 退出码必须是 0。非 0 → 停止，报告完整输出（此时备份已生成，改动可能已部分写入，不要自己 retry）。
 把 `<备份目录>` 原样记下来写进报告。
 
@@ -98,8 +98,8 @@ cd "TARGET" && node --test --test-concurrency=1 tests/*.test.mjs
 
 ```bash
 cd "D:/DSh tagger-lite"
-node scripts/pack-inject.mjs                  # → dist/dsh-tagger-inject-<版本>/ 与同名 zip（约 98 KB）
-node scripts/pack-inject.mjs --no-zip --quiet  # 只出目录
+node scripts/release/pack-inject.mjs                  # → dist/dsh-tagger-inject-<版本>/ 与同名 zip（约 98 KB）
+node scripts/release/pack-inject.mjs --no-zip --quiet  # 只出目录
 ```
 
 包内自带 `inject.cmd` / `inject.sh` / `README.txt` / `MANIFEST.txt`，把 zip 拷到目标机器解压即可；
@@ -124,6 +124,6 @@ agent 用包时把上面的 `node "INJECT"` 换成 `inject.cmd "TARGET"`（Windo
 ## 安全线
 
 - 注入后的 TARGET 是**私货全量版**：不要 `git push` 到公开仓，也不要打包上传。
-- 想回干净公开版：`--restore`（用最近一次备份，能删掉注入前不存在的文件），或重跑私有仓的 `node tools/make-public.mjs`。
+- 想回干净公开版：`--restore`（用最近一次备份，能删掉注入前不存在的文件），或重跑私有仓的 `node scripts/release/make-public.mjs`。
 - 备份默认落在脚本所在仓库的 `.inject-backups/<时间戳>/`；用注入包时落在**包目录**下，不污染 TARGET。
 - 注入包里的 `payload/` 是明文私货，别放进公开仓库或公开分享链接。

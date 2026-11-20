@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // plan: 把仓库打成便携包 dist/dsh-tagger-<版本>/ 与同名 .zip（零依赖、离线可用、任何环境解开就能跑）
 /**
- * scripts/pack.mjs — 便携包打包器。
+ * scripts/release/pack.mjs — 便携包打包器。
  *
  * 为什么自己写 zip：目标机器可能连 node 都没有（Windows 双击 deploy.cmd 会临时下载一份便携 node），
  * 所以打包这一步不能依赖 npm / zip 命令 / 7z。这里只用 node 标准库：
@@ -10,13 +10,13 @@
  * 好处是产物字节确定、任何解压工具都认（Windows 资源管理器 / macOS 归档实用工具 / unzip）。
  *
  * 用法：
- *   node scripts/pack.mjs                  # 打包到 dist/
- *   node scripts/pack.mjs --out /tmp/rel   # 换输出目录
- *   node scripts/pack.mjs --no-zip         # 只要目录，不打 zip
- *   node scripts/pack.mjs --quiet          # 只报结果
+ *   node scripts/release/pack.mjs                  # 打包到 dist/
+ *   node scripts/release/pack.mjs --out /tmp/rel   # 换输出目录
+ *   node scripts/release/pack.mjs --no-zip         # 只要目录，不打 zip
+ *   node scripts/release/pack.mjs --quiet          # 只报结果
  *
  * 包里有什么：能独立起 web 服务所需的一切（lib/ server/ client/ data/ locale/ types/ 文档与部署脚本），
- * 不含 tests/ tools/ public-src/ .git/ —— 那些是开发期的东西，公开版另有一条 make-public 流水线。
+ * 不含 tests/ scripts/（只带 scripts/win）/ public-src/ .git/ —— 那些是开发期的东西，公开版另有一条 make-public 流水线。
  */
 import { createHash } from "node:crypto"
 import { chmodSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs"
@@ -24,10 +24,10 @@ import path from "node:path"
 import process from "node:process"
 import { fileURLToPath } from "node:url"
 
-import { discoverDataDir } from "../lib/tags/loader.js"
+import { discoverDataDir } from "../../lib/tags/loader.js"
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
-export const ROOT = path.resolve(HERE, "..")
+export const ROOT = path.resolve(HERE, "..", "..")
 
 /** 整目录收进包里（相对仓库根） */
 export const INCLUDE_DIRS = ["lib", "server", "client", "data", "locale", "types", "scripts/win"]
@@ -51,7 +51,7 @@ export const INCLUDE_FILES = [
 ]
 
 /** 目录里遇到这些就不往下走 */
-const SKIP_NAMES = new Set(["node_modules", ".git", ".github", "tmp", "dist", "tests", "tools", "public-src", ".data", ".runtime"])
+const SKIP_NAMES = new Set(["node_modules", ".git", ".github", "tmp", "dist", "tests", "public-src", ".data", ".runtime"])
 
 /**
  * 找到本机的全量词表目录（一般来自 dsh-comfyui-workbench 的 danbooru 导入）。
@@ -233,7 +233,7 @@ export function makeDist(options = {}) {
   writeFileSync(path.join(dir, "MANIFEST.txt"), manifest.join("\n") + "\n")
 
   // 解压后 Linux/macOS 上这两个脚本要能直接执行（zip 里也记了 644）
-  for (const script of ["deploy.sh", "scripts/win/start-tagger.cmd"]) {
+  for (const script of ["deploy.sh", "start.sh", "scripts/win/stop-tagger.cmd"]) {
     const abs = path.join(dir, script)
     if (existsSync(abs) && process.platform !== "win32") chmodSync(abs, 0o755)
   }
@@ -268,7 +268,7 @@ function parseArgs(argv) {
     if (token === "--no-tags") { out.tags = false; continue }
     if (token === "--with-tags") { out.tags = true; continue }
     if (token === "--help" || token === "-h") {
-      console.log("用法：node scripts/pack.mjs [--out <目录>] [--no-zip] [--no-tags] [--quiet]")
+      console.log("用法：node scripts/release/pack.mjs [--out <目录>] [--no-zip] [--no-tags] [--quiet]")
       console.log("  --no-tags   不打包 data/danbooru 全量词表快照（包会小 20MB，但只剩 198 行补词）")
       process.exit(0)
     }
@@ -280,7 +280,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(fileURLToP
   const args = parseArgs(process.argv.slice(2))
   const dictionary = args.tags ? await resolveDictionary() : null
   if (args.tags && dictionary === null) {
-    console.warn("没找到全量词表目录（dsh-comfyui-workbench 的 danbooru 导入），这次只打补词表；要用全量词表先跑 scripts/build-tags.mjs 或设 DSH_DANBOORU_DIR。")
+    console.warn("没找到全量词表目录（dsh-comfyui-workbench 的 danbooru 导入），这次只打补词表；要用全量词表先跑 scripts/tags/build-tags.mjs 或设 DSH_DANBOORU_DIR。")
   }
   const result = makeDist({ outDir: args.outDir, zip: args.zip, quiet: args.quiet, dictionary })
   if (!args.quiet && dictionary !== null) console.log("词表快照：" + dictionary.files.length + " 个文件（" + dictionary.dir + "）")

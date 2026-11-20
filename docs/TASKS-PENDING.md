@@ -10,7 +10,7 @@
 ```bash
 EXE="C:/Users/<你的用户名>/AppData/Local/Programs/DeepSeek Harness/DeepSeek Harness.exe"
 cd "/d/DSh tagger-lite"
-ELECTRON_RUN_AS_NODE=1 "$EXE" scripts/check-tags.mjs           # 511 行 / 4 文件，结构自检通过
+ELECTRON_RUN_AS_NODE=1 "$EXE" scripts/tags/check-tags.mjs           # 511 行 / 4 文件，结构自检通过
 ELECTRON_RUN_AS_NODE=1 "$EXE" scripts/check-overlay-tags.mjs   # 1247 行 / 1247 tag，✓ 体检通过
 ELECTRON_RUN_AS_NODE=1 "$EXE" --test --test-concurrency=1 tests/*.test.mjs   # 265 tests / 264 pass / 1 skipped
 ```
@@ -63,4 +63,4 @@ for (const name of names) if (!entry.names.includes(name)) entry.names.push(name
 
 - `scripts/check-overlay-tags.mjs` 的「不在库」是拿**含 overlay 的索引**比对，所以 overlay 自创词条永远算「在库」。要更严可以再加一个 `--strict-dict`：只对主词表快照（`discoverDataDir()`）比对，把靠 overlay 自引用存活的词条列成警告。
 - 词表行数还可以继续加（主词表快照 99447 条里，overlay 只覆盖了很小一部分）。取材用 `scripts/suggest-overlay.mjs --group <Posture|Image composition|Attire|Face tags|Hair styles|…> --min-count N`。
-- `docs/PERF.md` 的基准还没跑在「词表 1247 行」上：`scripts/bench.mjs` 可以重跑一次看检索是否变慢（索引 99447 条，预计与之前同量级）。
+- `docs/PERF.md` 的基准还没跑在「词表 1247 行」上：`scripts/dev/bench.mjs` 可以重跑一次看检索是否变慢（索引 99447 条，预计与之前同量级）。

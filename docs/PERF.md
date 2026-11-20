@@ -16,8 +16,8 @@
 跑一遍自己看（有 `--json` 给 CI 或对比用，超标退出码 1）：
 
 ```bash
-node scripts/bench.mjs
-node scripts/bench.mjs --json --rounds 50
+node scripts/dev/bench.mjs
+node scripts/dev/bench.mjs --json --rounds 50
 ```
 
 ## 已经做掉的健壮性
@@ -27,7 +27,7 @@ node scripts/bench.mjs --json --rounds 50
 | 模型不吐字 / 吐一半 | 流式收齐再看 `finish.kind`；被截断（`max-tokens`）自动把上限翻倍重试一次，上限 16000 | `lib/forge/index.js` |
 | 请求卡住 | 共用 `lib/backend-common.js` 的带超时 request：LLM 用 `llm.timeoutMs`，ComfyUI 单次提交用 `comfy.submitTimeoutMs`（默认 120000），整张图用 `comfy.timeoutMs`（默认 900000） | `lib/backend-common.js` |
 | 索引被并发重建 | 进程内单例 + 单飞（`loadPromise` 只允许一个在飞），`ensureFresh` 靠 overlay 签名（文件名+size+mtime）判断要不要重载，最多留 4 份 | `lib/tags/index.js` |
-| 词表写坏一行 | 加载器按行 try/catch，坏行跳过并计数；CI 里 `scripts/check-tags.mjs` 提前拦下 | `lib/tags/loader.js` |
+| 词表写坏一行 | 加载器按行 try/catch，坏行跳过并计数；CI 里 `scripts/tags/check-tags.mjs` 提前拦下 | `lib/tags/loader.js` |
 | 模型回的不是 JSON | 抽围栏 → 取首个 `{` → 补齐括号 → 重试解析，全失败给 `bad-json` 而不是崩 | `lib/refine/diff.js` |
 | 面板与服务端版本不一致 | 老客户端缺字段一律有兜底（`pipeline` / `purge` / `spi` 都是可选读），不因为多一个字段就白屏 | `client/`、`server/public/` |
 | 进程退出 | SIGINT/SIGTERM 反序 dispose，keep-alive 连接 destroy，4s 兜底强退 | `server/standalone.mjs` |

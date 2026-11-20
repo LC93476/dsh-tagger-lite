@@ -1,5 +1,5 @@
-# DSh Tagger CI —— 三道门禁：词表结构、类型检查、全量测试。
-# 任何一道失败即红；本地等价命令见 README「测试与静态检查」。
+# DSh Tagger CI —— 五道门禁：词表结构、补词表体检、目录结构、类型检查、全量测试。
+# 本地一条命令等价：npm run check。任何一道失败即红。
 name: ci
 
 on:
@@ -35,6 +35,12 @@ jobs:
       - name: 词表结构自检（npm run check:tags）
         run: npm run check:tags
 
+      - name: 补词表体检（npm run check:overlay）
+        run: npm run check:overlay
+
+      - name: 目录结构体检（npm run check:layout）
+        run: npm run check:layout
+
       - name: 类型检查（npm run typecheck）
         run: npm run typecheck
 
@@ -42,7 +48,7 @@ jobs:
         env:
           # 真机 ComfyUI 用例靠这个变量跳过；CI 上没有 ComfyUI
           DSH_TAGGER_NO_COMFY: "1"
-        # npm test = scripts/run-tests.mjs：串行跑（几个套件会读写同一份词表目录，并行会互相踩）
+        # npm test = scripts/dev/run-tests.mjs：串行跑（几个套件会读写同一份词表目录，并行会互相踩）
         # 失败时把失败用例名与断言贴到日志末尾：Actions 的日志查看器是虚拟化的，
         # 中段的 not ok 往往翻不到，末尾这几行才是能直接看到的部分。
         run: |

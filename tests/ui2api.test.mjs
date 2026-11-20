@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { convert } from '../tools/ui2api.mjs'
+import { convert } from '../scripts/release/ui2api.mjs'
 
 function info(required, optional = {}) {
   return { QuarkSAM3SEGS: { input: { required, optional } } }

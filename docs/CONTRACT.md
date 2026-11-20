@@ -42,15 +42,21 @@ HTTP/MCP 的逐条参数与示例不在这里，看 [`API.md`](./API.md)。
 | `lib/cordis/host.js` | 独立模式的 ctx 装配与织入：llm / webServer / tools 三个传输层的实现正文 |
 | `server/public/` | Web 面板静态资源，由独立服务的 `/public` 前缀提供（白名单扩展名 + 三重防穿越 + `no-cache`/ETag）：`panel.css` / `api.js` / `state.js` / `render.js`（灯 / 结果卡 / 错误码表）/ `settings.js`（LLM 与 ComfyUI 设置、工作流下拉、参考图行）/ `history.js`（历史、姿势弹窗、出图轮询、`localStorage` 参数记忆）/ `app.js`（只管 boot 与事件绑定） |
 | `lib/seed-tags.js` | 内置 seed 词条的薄入口（`SEED_TAGS = loadSeedRows()`）；词条本体在 `data/tags/seed/seed-01..13-*.jsonl` |
-| `scripts/run-tests.mjs` | `npm test` 的入口：按 Node 版本决定加不加 `--test-concurrency=1`（<20.11 没有该参数） |
-| `scripts/check-tags.mjs` | 词表结构自检（`npm run check:tags`） |
-| `scripts/bench.mjs` | 本地计算层基准（`npm run bench`，超预算 exit 1，数字见 `docs/PERF.md`） |
-| `scripts/push-to-github.ps1` | 唯一的推送脚本（`-User -Repo -Private -UseSsh -RunCi -Both -LiteDir`）；原来的 `push-ci.ps1` 已并入 `-RunCi` |
-| `scripts/win/` | Windows 启停脚本（根目录的 `.cmd` / `.vbs` 只是转发入口） |
+| `bin/tagger.mjs` | 唯一命令行入口 `dsh-tagger`：`--port` / `--host` / `--data-dir` / `--open|--no-open` / `--setup` / `--version` / `--help`，其余参数（`--base-url` 等）透传给 `server/standalone.mjs` |
+| `scripts/setup.mjs` | 首次运行向导（`npm run setup`）：端口 / 模型接口 baseUrl / API Key / model / ComfyUI 地址 / 工作流目录，**回车 = 跳过不写该键**；`--yes` 全默认、`--print` 只打印 |
+| `scripts/dev/` | `run-tests.mjs`（`npm test` 入口，按 Node 版本决定加不加 `--test-concurrency=1`）/ `check-layout.mjs`（`npm run check:layout`）/ `bench.mjs`（`npm run bench`） |
+| `scripts/tags/` | `build-tags.mjs` / `check-tags.mjs`（`npm run check:tags`）/ `check-overlay-tags.mjs`（`npm run check:overlay`）/ `suggest-overlay.mjs`（从快照里挑未收录词） |
+| `scripts/release/` | `pack.mjs`（便携包）/ `pack-inject.mjs`（注入包）/ `make-public.mjs`（公开版）/ `inject-private.mjs`（注入）/ `ui2api.mjs`（UI 工作流转 API 格式）/ `push-to-github.ps1`（唯一推送脚本：`-User -Repo -Private -UseSsh -RunCi -Both -LiteDir`）；对外入口是 `npm run pack` / `pack:inject` / `publish:lite` |
+| `scripts/assets/make-pose-thumbs.py` | 姿势缩略图生成（一次性资产脚本，不进运行时、不进便携包） |
+| `scripts/win/` | Windows 启停辅助：`stop-tagger.cmd [端口]` 按端口停服务（根目录 `start-tagger.cmd` / `start-tagger-hidden.vbs` 只是 `start.cmd` 的转发壳） |
+| `start.cmd` / `start.sh` | 一键启动：找 node（→ 便携 node → docker）→ 首次跑向导 → 起服务并开浏览器；参数 `[端口 [host]]` |
+| `deploy.cmd` / `deploy.sh` | 三行转发（`call start.cmd %*` / `exec start.sh "$@"`），只为兼容老入口 |
+| `Dockerfile` / `docker-compose.yml` / `.env.example` | 容器镜像 `dsh-tagger:0.2.0`，端口 `DSH_TAGGER_PORT`，数据卷 `tagger-data`，`healthcheck` 打 `/tagger/api/health` |
 | `data/tags/*.jsonl` | 随包词表补丁（overlay）；用户词表在 `<dataDir>/tags/`，改了热重载 |
 | `docs/CONTRACT.md` | **本文件**：唯一权威核心契约（目录 / 配置 / 路由 / refine / forge / tags / SPI / 客户端 / 门禁） |
 | `docs/API.md` | 接口手册（HTTP 路由表 + MCP 工具 + 示例） |
-| `docs/PERF.md` | 实测性能数字、预算表、健壮性清单（`scripts/bench.mjs`） |
+| `docs/LAYOUT.md` | 目录与分工速览（运行时 / 入口 / 工具 / 测试与文档）+ 三条硬规矩 |
+| `docs/PERF.md` | 实测性能数字、预算表、健壮性清单（`scripts/dev/bench.mjs`） |
 
 ## 2. 运行时对象
 
@@ -314,23 +320,27 @@ window.__ModuleLoader__.load({
 ## 11. 门禁（改完必须过）
 
 ```bash
-npm run check:tags   # 词表结构自检（data/tags/*.jsonl 每行合法 + 同文件 tag 不重复）
-npm run typecheck    # tsc --noEmit -p tsconfig.json（不进构建，只查）
-npm test             # 全量测试，串行（scripts/run-tests.mjs）
-npm run check        # 上面三道连跑
-npm run bench        # 本地计算层基准，超预算 exit 1（见 docs/PERF.md）
+npm run check:tags     # 词表结构自检（data/tags/*.jsonl 每行合法 + 同文件 tag 不重复）
+npm run check:overlay  # overlay 体检：tag 是否在词库、中文是否缺、跨文件重复、别名与权威写法冲突、POSE_HINTS 是否在库
+npm run check:layout   # 目录体检：根目录白名单、必需目录、docs 索引、script 目标存在、data/tags 行数 == tag 数
+npm run typecheck      # tsc --noEmit -p tsconfig.json（不进构建，只查）
+npm test               # 全量测试，串行（scripts/dev/run-tests.mjs）
+npm run check          # 上面五道连跑 —— 改完这一条必须绿
+npm run bench          # 本地计算层基准，超预算 exit 1（见 docs/PERF.md）
 ```
 
-`npm test` 走 `scripts/run-tests.mjs`，不是裸的 `node --test`：Node 20.11 之前没有
+`npm test` 走 `scripts/dev/run-tests.mjs`，不是裸的 `node --test`：Node 20.11 之前没有
 `--test-concurrency`，写死在 package.json 里会让老版本直接报参数错；脚本按版本决定加不加。
 `package.json` 的 `engines.node` 是 `>=18.18.0`，CI 用 Node 20。
 
-这四道门禁与 `.github/workflows/ci.yml` 一一对应（CI 是 windows-latest，与开发机一致；
-步骤依次是 `npm install` → `npm run check:tags` → `npm run typecheck` → `npm test`）。
+前五道就是 `npm run check` 串起来的那一串。`.github/workflows/ci.yml` 是 windows-latest，与开发机一致；
+CI 步骤依次是 `npm install` → `npm run check:tags` → `npm run typecheck` → `npm test`
+（`check:overlay` / `check:layout` 是纯静态体检，本地跑，CI 不跑）。
 
 **本机没有 `node` 命令时**（只有宿主自带的 Electron）：用
-`ELECTRON_RUN_AS_NODE=1 "<DeepSeek Harness.exe>" scripts/run-tests.mjs`，
-同理 `... scripts/check-tags.mjs` / `... /tmp/tsdk/package/lib/tsc.js -p tsconfig.json`。
+`ELECTRON_RUN_AS_NODE=1 "<DeepSeek Harness.exe>" scripts/dev/run-tests.mjs`，
+同理 `... scripts/tags/check-tags.mjs` / `... scripts/tags/check-overlay-tags.mjs` / `... scripts/dev/check-layout.mjs` /
+`... /tmp/tsdk/package/lib/tsc.js -p tsconfig.json`。
 
 **测试必须串行跑**（`--test-concurrency=1`）：deliverable 里有几个套件会读同一份默认词表目录，进程并行时可能撞上另一个进程正在重写 overlay，表现为偶发 1 条失败（单跑必绿）。这不是业务 bug，但不许在门禁里并行。
 

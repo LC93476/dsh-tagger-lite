@@ -17,7 +17,7 @@ import { fileURLToPath } from 'node:url'
 import tagsEntry, * as tagsNs from '../lib/tags.js'
 import * as matcherNs from '../lib/tags/matcher.js'
 import { createTagIndex, escapeParens, parseTerm, resetTagIndexCache, unescapeTag } from '../lib/tags.js'
-import { runNormalize, summaryToJson, summaryToText } from '../scripts/build-tags.mjs'
+import { runNormalize, summaryToJson, summaryToText } from '../scripts/tags/build-tags.mjs'
 
 const silent = { info() {}, warn() {}, error() {} }
 const repoRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)))

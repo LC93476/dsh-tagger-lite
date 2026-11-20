@@ -37,7 +37,7 @@ test("补词表闸门：干净的 overlay 通过，坏行被逐类点名", { ski
       JSON.stringify({ tag: "solo", cn: "单人", postCount: 498022, kind: "general", aliases: ["一个人"] }),
       "",
     ].join("\n"), "utf8")
-    const ok = runScript("check-overlay-tags.mjs", ["--dir", dir, "--json"])
+    const ok = runScript("tags/check-overlay-tags.mjs", ["--dir", dir, "--json"])
     assert.equal(ok.status, 0, ok.stderr || ok.stdout)
     const parsed = JSON.parse(ok.stdout)
     assert.equal(parsed.rows, 2)
@@ -49,7 +49,7 @@ test("补词表闸门：干净的 overlay 通过，坏行被逐类点名", { ski
       JSON.stringify({ tag: "solo", cn: "", postCount: 498022 }),
       "",
     ].join("\n"), "utf8")
-    const bad = runScript("check-overlay-tags.mjs", ["--dir", dir, "--json"])
+    const bad = runScript("tags/check-overlay-tags.mjs", ["--dir", dir, "--json"])
     assert.equal(bad.status, 1)
     const report = JSON.parse(bad.stdout)
     assert.equal(report.violations.notInDict.length, 1)
@@ -63,7 +63,7 @@ test("补词表闸门：干净的 overlay 通过，坏行被逐类点名", { ski
 })
 
 test("补词表取材：suggest-overlay 只吐词库里真有的词，且能按热度/分组筛", { skip: hasDictionary ? false : "没有本地词表，跳过" }, () => {
-  const result = runScript("suggest-overlay.mjs", ["--json", "--min-count", "100000", "--limit", "5"])
+  const result = runScript("tags/suggest-overlay.mjs", ["--json", "--min-count", "100000", "--limit", "5"])
   assert.equal(result.status, 0, result.stderr)
   const parsed = JSON.parse(result.stdout)
   assert.ok(Array.isArray(parsed.items))
@@ -71,6 +71,6 @@ test("补词表取材：suggest-overlay 只吐词库里真有的词，且能按�
   for (const item of parsed.items) assert.ok(item.postCount >= 100000)
   assert.ok(parsed.matched >= parsed.items.length)
 
-  const bad = runScript("suggest-overlay.mjs", ["--json", "--kind", "nope"])
+  const bad = runScript("tags/suggest-overlay.mjs", ["--json", "--kind", "nope"])
   assert.equal(bad.status, 2)
 })

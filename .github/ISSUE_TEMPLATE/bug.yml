@@ -1,0 +1,65 @@
+name: Bug 报告
+description: 面板、锻造、出图或接口出问题时用这个模板
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        先用 `npm run check` 确认不是本地环境问题；贴日志时把 API Key 抹掉。
+  - type: textarea
+    id: what
+    attributes:
+      label: 发生了什么
+      description: 期望 vs 实际，尽量一句话说清
+      placeholder: 点「锻造」后结果区空白，控制台报 ...
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      placeholder: |
+        1. 打开面板 http://127.0.0.1:7789/
+        2. 输入「...」
+        3. 点「锻造」
+        4. 看到 ...
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: 涉及哪部分
+      options:
+        - 面板 / 前端
+        - 锻造（LLM）
+        - 二次精修
+        - 出图（ComfyUI）
+        - 词表 / 姿势库
+        - HTTP 接口 / MCP
+        - 安装 / 启动
+        - 其它
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: 版本
+      description: package.json 里的 version，或 git commit
+      placeholder: 0.2.0 / dd0138b
+    validations:
+      required: true
+  - type: textarea
+    id: env
+    attributes:
+      label: 环境
+      description: 系统、Node 版本、面板端口、模型接口、ComfyUI 版本
+      placeholder: |
+        Windows 11 / Node 22.14.0 / 端口 7789
+        模型 deepseek-v4.1-flash / ComfyUI 0.45.0
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日志与截图
+      description: 服务端日志、浏览器控制台、`/tagger/api/health` 的输出（记得抹掉 Key）
+      render: shell

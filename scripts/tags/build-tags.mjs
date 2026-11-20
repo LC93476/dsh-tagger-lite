@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-// plan: scripts/build-tags.mjs 归一化 danbooru jsonl 到 <dir>/tags，并报告条目/分类/overlay/重复/缺中文统计
+// plan: scripts/tags/build-tags.mjs 归一化 danbooru jsonl 到 <dir>/tags，并报告条目/分类/overlay/重复/缺中文统计
 /**
- * scripts/build-tags.mjs — 把本机 danbooru jsonl 归一化到 <dir>/tags/*.jsonl。
+ * scripts/tags/build-tags.mjs — 把本机 danbooru jsonl 归一化到 <dir>/tags/*.jsonl。
  *
  * 为什么要有这一步：插件默认直接读本机原始数据；但如果用户把它挪走、
  * 或者想给别的东西一份干净数据，就得有一个稳定格式。归一化后每行是
@@ -9,7 +9,7 @@
  * 去掉了 updatedAt、合并了同一个 tag、按 postCount 降序。
  *
  * 用法（本机没有 node 命令，用宿主自带的 node 运行时）：
- *   ELECTRON_RUN_AS_NODE=1 "<DeepSeek Harness.exe>" scripts/build-tags.mjs
+ *   ELECTRON_RUN_AS_NODE=1 "<DeepSeek Harness.exe>" scripts/tags/build-tags.mjs
  *   ... --from D:/QUARK/dsh-comfyui-workbench/data/danbooru --out D:/tmp/tags
  *   ... --min-post 100 --quiet --json
  *
@@ -25,8 +25,8 @@ import os from 'node:os'
 import path from 'node:path'
 import readline from 'node:readline'
 import { fileURLToPath } from 'node:url'
-import { discoverDataDir, normalizeKind, primaryChineseName } from '../lib/tags.js'
-import { addRecord, listAllJsonlFiles, overlayDirs, readJsonl } from '../lib/tags/loader.js'
+import { discoverDataDir, normalizeKind, primaryChineseName } from '../../lib/tags.js'
+import { addRecord, listAllJsonlFiles, overlayDirs, readJsonl } from '../../lib/tags/loader.js'
 
 const OUT_FILES = {
   general: 'general.jsonl',

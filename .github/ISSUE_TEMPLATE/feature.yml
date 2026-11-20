@@ -1,0 +1,38 @@
+name: 功能建议
+description: 想要的新能力或改进
+title: "[feat] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: 想解决什么问题
+      description: 先说场景，再说方案 —— 不要一上来就指定实现
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: 你设想的做法（可选）
+      description: 面板交互 / 接口形状 / 词表条目都行
+  - type: dropdown
+    id: area
+    attributes:
+      label: 涉及哪部分
+      options:
+        - 面板 / 前端
+        - 锻造（LLM）
+        - 二次精修
+        - 出图（ComfyUI）
+        - 词表 / 姿势库
+        - HTTP 接口 / MCP
+        - 安装 / 启动
+        - 其它
+    validations:
+      required: true
+  - type: checkboxes
+    id: contract
+    attributes:
+      label: 契约影响
+      options:
+        - label: 这个建议可能需要改外部契约（路由 / MCP 工具 / config 键 / testid），我愿意在 PR 里同步 docs/CONTRACT.md

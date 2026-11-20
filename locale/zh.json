@@ -295,7 +295,7 @@
   "err.empty-file": "这个文件是空的（0 字节）",
   "err.too-large": "图片超过 24MB，压一下再传",
   "err.no-launch-dir": "先在设置里填 ComfyUI 的安装目录（launchDir），否则服务端不知道往哪写图",
-  "err.bad-workflow": "工作流模板格式不对（UI 格式要先过 tools/ui2api.mjs 转成 API 格式）",
+  "err.bad-workflow": "工作流模板格式不对（UI 格式要先过 scripts/release/ui2api.mjs 转成 API 格式）",
   "err.workflow-not-found": "没有这个工作流模板，检查模板目录",
   "err.no-workflow": "模板目录里没有可用工作流",
   "err.no-prompt-node": "没找到能写提示词的节点：模板里的 CLIPTextEncode 认不出来",

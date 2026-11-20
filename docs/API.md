@@ -256,20 +256,22 @@ curl -s 'http://127.0.0.1:PORT/tagger/api/poses?set=sexy&q=侧坐&limit=5'
 curl -s http://127.0.0.1:PORT/tagger/api/mcp -H 'content-type: application/json' \
   -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05"}}'
 curl -s http://127.0.0.1:PORT/tagger/api/mcp -H 'content-type: application/json' \
-  -d '{"jsonrpc":"2.0","id":2,"method":"tools/list"}'
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools\/list"}'
 curl -s http://127.0.0.1:PORT/tagger/api/mcp -H 'content-type: application/json' \
-  -d '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"forge_tags","arguments":{"text":"银发少女跪在床边回头"}}}'
+  -d '{"jsonrpc":"2.0","id":3,"method":"tools\/call","params":{"name":"forge_tags","arguments":{"text":"银发少女跪在床边回头"}}}'
 ```
+
+> JSON 里的 `\/` 是 `/` 的合法转义（等价于 MCP 的 tools list 方法），原样复制即可。
 
 ## 独立运行（web 版入口）
 
 ```bash
 DSH_TAGGER_API_KEY=sk-xxx DSH_TAGGER_MODEL=deepseek-v4.1-flash \
-  node server/standalone.mjs --port 7789 --base-url https://api.example.com
+  node bin/tagger.mjs --port 7789 --base-url https://api.example.com
 # 或
-npm run serve -- --port 7789
+npm start -- --port 7789
 ```
 
 `GET /` 返回**锻造台面板**（`server/panel.html`，原生 JS，无需构建；改文件后刷新浏览器即生效）；`GET /about` 是原来的 HTML 壳（健康状态 + 接口清单）。`/tagger/api/*` 与 DSH 内行为一致。
 
-Windows 上也可以直接双击仓库根目录的 `start-tagger.cmd`（前台带日志）或 `start-tagger-hidden.vbs`（无窗口），端口默认 7789，`stop-tagger.cmd [端口]` 停止。
+不想敲命令就直接双击仓库根目录的 `start.cmd`：首次进向导，之后起服务并开浏览器，端口默认 7789（`start.cmd 8090` 换端口）。无窗口启动用根目录 `start-tagger-hidden.vbs`（它只是无窗口跑 `start.cmd`），停服务用 `stop-tagger.cmd [端口]`。

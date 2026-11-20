@@ -15,7 +15,7 @@
     "./package.json": "./package.json"
   },
   "bin": {
-    "dsh-tagger-server": "./server/standalone.mjs"
+    "dsh-tagger": "./bin/tagger.mjs"
   },
   "files": [
     "index.js",
@@ -27,16 +27,21 @@
     "locale/",
     "types/",
     "icon.svg",
+    "bin/",
     "README.md"
   ],
   "scripts": {
-    "test": "node scripts/run-tests.mjs",
+    "setup": "node scripts/setup.mjs",
+    "start": "node bin/tagger.mjs",
+    "serve": "node bin/tagger.mjs",
+    "test": "node scripts/dev/run-tests.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "check:tags": "node scripts/check-tags.mjs",
-    "bench": "node scripts/bench.mjs",
-    "check": "npm run check:tags && npm run typecheck && npm test",
-    "serve": "node server/standalone.mjs",
-    "pack": "node scripts/pack.mjs"
+    "check:tags": "node scripts/tags/check-tags.mjs",
+    "check:overlay": "node scripts/tags/check-overlay-tags.mjs",
+    "check:layout": "node scripts/dev/check-layout.mjs",
+    "bench": "node scripts/dev/bench.mjs",
+    "check": "npm run check:tags && npm run check:overlay && npm run check:layout && npm run typecheck && npm test",
+    "pack": "node scripts/release/pack.mjs"
   },
   "engines": {
     "node": ">=18.18.0"

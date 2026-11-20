@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * scripts/check-overlay-tags.mjs — 补词表（overlay）与中文意图词的**质量闸门**。
+ * scripts/tags/check-overlay-tags.mjs — 补词表（overlay）与中文意图词的**质量闸门**。
  *
- * scripts/check-tags.mjs 只看结构（JSON 合法、字段类型、同文件重复）。
+ * scripts/tags/check-tags.mjs 只看结构（JSON 合法、字段类型、同文件重复）。
  * 这个脚本多查三件真正会导致锻造失败/降质的事：
  *   1. 词库外：tag 在真实 danbooru 词表（99k 条）里不存在 —— 锻造时会 warn「不在库里」并被丢弃；
  *   2. 缺中文：cn 为空，面板的中英对照与中文检索都会瞎；
@@ -10,10 +10,10 @@
  * 另外核对 lib/zh-intent.js 的 POSE_HINTS：意图里补的每个 tag 也必须在库里，否则补词等于没补。
  *
  * 用法：
- *   node scripts/check-overlay-tags.mjs                 # 全查，有违规 exit 1
- *   node scripts/check-overlay-tags.mjs --quiet         # 只报汇总与违规清单
- *   node scripts/check-overlay-tags.mjs --json           # 机器可读
- *   node scripts/check-overlay-tags.mjs --max-report 50  # 每类最多列几条（默认 20）
+ *   node scripts/tags/check-overlay-tags.mjs                 # 全查，有违规 exit 1
+ *   node scripts/tags/check-overlay-tags.mjs --quiet         # 只报汇总与违规清单
+ *   node scripts/tags/check-overlay-tags.mjs --json           # 机器可读
+ *   node scripts/tags/check-overlay-tags.mjs --max-report 50  # 每类最多列几条（默认 20）
  *
  * 退出码：0 全部通过；1 有违规；2 词表加载失败。
  */
@@ -21,10 +21,10 @@ import { readFileSync, readdirSync, existsSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { createTagIndex } from '../lib/tags/index.js'
-import { POSE_HINTS } from '../lib/zh-intent.js'
+import { createTagIndex } from '../../lib/tags/index.js'
+import { POSE_HINTS } from '../../lib/zh-intent.js'
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
 const argv = process.argv.slice(2)
 /** @param {string} name @returns {string | undefined} */
 function argOf(name) {

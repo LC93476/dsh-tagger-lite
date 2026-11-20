@@ -1,84 +1,45 @@
-# 一键部署（DSh Tagger 独立 web 服务）
+# 安装与启动
 
-这个项目**没有任何运行时依赖**：只用 node 标准库，不需要 `npm install`，不需要编译，词表（`data/tags/*.jsonl`，约 740KB）已经一起打包。
-所以「在任何环境一键部署」只有三件事要满足：**有 node 或有 docker**、一个可写的**数据目录**、以及（要真出图的）一个 **ComfyUI** 与模型接口。
+零运行时依赖：只要有 node（≥18.18.0），`npm start` 就能跑。四条路挑一条。
 
-## 四条路，挑一条
+## 1. Windows：双击 `start.cmd`
 
-| 场景 | 一条命令 | 说明 |
-| --- | --- | --- |
-| Windows，本机随便跑 | 双击 `deploy.cmd` | 自动挑 node → docker → 便携 node（都没有就下 30MB 便携版，只下一次） |
-| macOS / Linux | `./deploy.sh` | 先试 node，再试 docker |
-| 服务器 / NAS / 群晖（有 Docker） | `docker compose up -d --build` | 数据进命名卷，`restart: unless-stopped` |
-| 断网机器 / 拷 U 盘 | `node scripts/pack.mjs` 打 zip，拷过去解开跑 `deploy.sh` 或双击 `deploy.cmd` | 包自带 `data/`，解开即可跑，无需联网 |
+- 会依次找 `node`、`%ProgramFiles%\nodejs\node.exe`，都没有就下便携 node 到 `.runtime/`（约 30 MB，仅一次）。
+- 首次运行先进向导（`scripts\setup.mjs`），问 6 个问题，回车 = 默认 / 跳过该键。
+- 端口已在监听就只开浏览器，不会再起第二个进程。`start.cmd 8090` 换端口。
 
-起来之后打开 <http://127.0.0.1:7789/>（换端口就换 URL 里的端口）。
+## 2. macOS / Linux：`./start.sh`
 
-## Windows：双击 deploy.cmd
+- 同样三级兜底：`node` → `nodejs` → `.runtime/node/bin/node`；都没有但有 docker 就 `docker compose up`。
+- `./start.sh 8090 0.0.0.0` 换端口并对外监听。
 
-- 默认端口 7789，要换：`deploy.cmd 8090`。
-- 数据落在包目录下的 `.data/`（`settings.json`、标签缓存），想换位置就设 `DSH_TAGGER_DATA`。
-- 没有 node / docker 时会下便携版 Node v22 到 `.runtime/`，之后不再下载。
-- 关窗口即停服务；要后台常驻用 `scripts/win/start-tagger.cmd`（带端口探测与防重复启动）或做成计划任务。
-
-## macOS / Linux：./deploy.sh
+## 3. Docker
 
 ```bash
-chmod +x deploy.sh
-./deploy.sh                 # http://127.0.0.1:7789/
-./deploy.sh 8090            # 换端口
-./deploy.sh 8090 0.0.0.0    # 对外监听（放进容器/局域网）
+docker compose up -d          # 端口 7789，数据在卷 tagger-data
 ```
 
-脚本会自己判断：有 `node` 直接跑；没有但装了 `docker` 就 `docker compose up --build`；两个都没有就打印安装方式后退出（不改你的系统）。
+改端口用 `.env` 里的 `DSH_TAGGER_PORT`；容器里 ComfyUI 走 `host.docker.internal:8188`。
 
-## Docker / docker compose（最省心的“任何环境”）
+## 4. 手动 / 装成依赖
 
 ```bash
-cp .env.example .env         # 填 BASE_URL / API_KEY / MODEL，按需改端口
-docker compose up -d --build
-docker compose logs -f       # 看启动日志
+npm install && npm start      # 或 node bin/tagger.mjs --port 7789 --open
+npm link && dsh-tagger --help # 用 bin 名，参数同 bin/tagger.mjs
 ```
 
-要点：
+## 配置模型与 ComfyUI
 
-- 镜像基于 `node:22-alpine`，**构建不联网装包**（没有依赖），离线可构建。
-- 数据在命名卷 `tagger-data`（容器内 `/data`），重建不丢配置。
-- ComfyUI 跑在宿主机上时，容器里的回环地址指不到它：`.env` 里写 `DSH_TAGGER_COMFY_URL=http://host.docker.internal:8188`（compose 已加 `extra_hosts`）。
-- 想让容器直接读宿主的工作流模板目录：取消 `docker-compose.yml` 里那条挂载注释，并把面板「设置 → 工作流模板目录」填容器内路径（如 `/workflows`）。
-- 健康检查打的是 `/tagger/api/health`；`docker compose ps` 看到 `healthy` 就是起来了。
+向导写的是数据目录里的 `settings.json`（默认 `.data/settings.json`）：`server.port/host`、`llm.baseUrl/apiKey/model`、`comfy.baseUrl/workflowDir`。重填用 `npm run setup`；面板里也能直接改。不想写文件就给环境变量 `DSH_TAGGER_BASE_URL / API_KEY / MODEL / COMFY_URL / WORKFLOW_DIR`。
 
-## 打包成便携 zip
+## 数据目录在哪
 
-```bash
-node scripts/pack.mjs                 # dist/dsh-tagger-0.2.0/ 与 dist/dsh-tagger-0.2.0.zip
-node scripts/pack.mjs --out D:/rel    # 换输出目录
-node scripts/pack.mjs --no-zip        # 只要目录
-```
-
-包里是「起服务需要的全部」：`lib/ server/ client/ data/ locale/ types/` + 文档 + 部署脚本 + `Dockerfile`；不含 `tests/ tools/ public-src/ .git/`。
-**包里自带全量词表快照**：打包时会从本机的 danbooru 导入目录（`dsh-comfyui-workbench/data/danbooru`）把
-`general / characters / copyrights / artists` 四份 `.jsonl`（约 19MB）一起打进 `data/danbooru/`，
-换台机器解开就有 99470 条词，不用再跑 `scripts/build-tags.mjs`。不想要这 19MB 就加 `--no-tags`
-（包里只剩 `data/tags/` 那 198 行补词，锻造能用但常见词会大量缺失）。
-
-清单在 zip 内的 `MANIFEST.txt`（每个文件的 sha256 前 16 位与字节数）。zip 是 store 方式（不压缩），任何解压工具都认。
-
-## 配置模型接口与 ComfyUI
-
-起来后是**没配状态**：锻造会如实回 `no-llm`，ComfyUI 灯是红的。两条配法：
-
-1. 面板「设置 → 接口设置」填地址 / Key / 模型名 → 保存（写进数据目录的 `settings.json`，立刻生效）。
-2. 环境变量（适合容器）：`DSH_TAGGER_BASE_URL` / `DSH_TAGGER_API_KEY` / `DSH_TAGGER_MODEL` / `DSH_TAGGER_WORKFLOW_DIR`。
-
-ComfyUI 那边建议开 `--listen 0.0.0.0` 只在容器场景需要；本机跑默认 `127.0.0.1:8188` 就够。
+`--data-dir` 指定 > `DSH_TAGGER_DATA` > `DSH_PROMPT_FORGE_DATA` > `~/.dsh-tagger`（老目录 `~/.dsh-prompt-forge` 有配置就沿用）；`start.cmd` / `start.sh` 默认用仓库下的 `.data`，docker 里是卷 `tagger-data`。运行历史、备份、`settings.json` 都在里面，删掉等于恢复出厂。
 
 ## 常见问题
 
-| 现象 | 处理 |
+| 症状 | 处理 |
 | --- | --- |
-| `端口 7789 已被占用` | 换端口：`deploy.cmd 8090` / `./deploy.sh 8090` / `DSH_TAGGER_PORT=8090 docker compose up` |
-| 面板能开，锻造回 `no-llm` | 没填模型接口；在面板设置里填，或用 `DSH_TAGGER_BASE_URL` + `DSH_TAGGER_API_KEY` |
-| 出图回 `unreachable` | ComfyUI 没起，或地址不对；容器里要用 `host.docker.internal` |
-| 出图回 `no-workflow-dir` / 下拉是空的 | 设置里「工作流模板目录」要指向放 `*.json` + `*.schema.json` 的目录 |
-| 想看标签索引是否起来了 | `curl http://127.0.0.1:7789/tagger/api/health` 与 `/state`（`tags.index` 应是 99470） |
+| 起不来、报端口占用 | 换端口（`start.cmd 8090`），或先关掉上一个实例 |
+| 出图为空 / ComfyUI 连不上 | 确认 ComfyUI 在 `127.0.0.1:8188`（docker 用 `host.docker.internal:8188`），面板设置里点一次「测试连接」 |
+| 锻造报模型错误 | 检查 `llm.baseUrl` 与 `apiKey`；`npm run setup --print` 看当前值，`npm run setup` 重填 |

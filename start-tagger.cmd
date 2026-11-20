@@ -1,3 +1,4 @@
 @echo off
-rem plan: 根目录入口，真正的脚本在 scripts\win\start-tagger.cmd（历史习惯：双击根目录这个就行）
-call "%~dp0scripts\win\start-tagger.cmd" %*
+rem 历史入口（保留双击习惯）：真正的实现只有一份，在根目录 start.cmd。
+rem 想在这个窗口里看服务日志就用 start.cmd；要静默后台跑就用 start-tagger-hidden.vbs。
+call "%~dp0start.cmd" %*

@@ -6,12 +6,12 @@
  * 出问题时的判据：索引构建（一次）> 3s、单次 canonicalize 40 条 > 30ms、单次 postprocess > 5ms，
  * 就说明有人往热路径里塞了 IO 或正则回溯。
  *
- * 用法：node scripts/bench.mjs [--json] [--rounds ³N]
+ * 用法：node scripts/dev/bench.mjs [--json] [--rounds ³N]
  */
-import { createTagIndex } from '../lib/tags.js'
-import { createPostProcessor } from '../lib/postprocess.js'
-import { createRepairer } from '../lib/repair.js'
-import { detectPoseHints, applyPoseHints } from '../lib/zh-intent.js'
+import { createTagIndex } from '../../lib/tags.js'
+import { createPostProcessor } from '../../lib/postprocess.js'
+import { createRepairer } from '../../lib/repair.js'
+import { detectPoseHints, applyPoseHints } from '../../lib/zh-intent.js'
 
 const argv = process.argv.slice(2)
 const asJson = argv.includes('--json')

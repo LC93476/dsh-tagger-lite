@@ -1,5 +1,5 @@
 /**
- * ui2api.mjs —— 把 ComfyUI 网页导出的 UI 工作流（nodes/links）转成 /prompt 能吃的 API 格式。
+ * scripts/release/ui2api.mjs —— 把 ComfyUI 网页导出的 UI 工作流（nodes/links）转成 /prompt 能吃的 API 格式。
  *
  * 为什么需要：网页里保存的 .json 是 UI 图（含坐标、widgets_values 数组），
  * /prompt 只认 { "节点id": { class_type, inputs } }。转换的关键是拿 /object_info

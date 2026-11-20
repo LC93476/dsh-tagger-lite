@@ -6,14 +6,14 @@
  * 为什么需要：词表是手写补丁文件，一个中文逗号、一个漏引号就会让整行被加载器安静跳过，
  * 表现为「这个词明明写了却查不到」。CI 里先跑这一道，把语法错挡在测试之前。
  *
- * 用法：node scripts/check-tags.mjs [--dir <目录>] [--quiet]
+ * 用法：node scripts/tags/check-tags.mjs [--dir <目录>] [--quiet]
  * 退出码：0 全部合法；1 有错；2 词表目录不存在。
  */
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
 
 function parseArgs(argv) {
   const out = { dir: path.join(ROOT, 'data', 'tags'), quiet: false }
@@ -23,7 +23,7 @@ function parseArgs(argv) {
     else if (arg.startsWith('--dir=')) out.dir = arg.slice(6)
     else if (arg === '--quiet' || arg === '-q') out.quiet = true
     else if (arg === '--help' || arg === '-h') {
-      console.log('用法: node scripts/check-tags.mjs [--dir <目录>] [--quiet]')
+      console.log('用法: node scripts/tags/check-tags.mjs [--dir <目录>] [--quiet]')
       process.exit(0)
     } else {
       console.error('不认识的参数: ' + arg)

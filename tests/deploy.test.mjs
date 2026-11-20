@@ -6,17 +6,17 @@ import path from "node:path"
 import test from "node:test"
 import { fileURLToPath } from "node:url"
 
-import { crc32, listPortableFiles, makeDist, makeZip, readVersion } from "../scripts/pack.mjs"
+import { crc32, listPortableFiles, makeDist, makeZip, readVersion } from "../scripts/release/pack.mjs"
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const read = rel => readFileSync(path.join(ROOT, rel), "utf8")
 
 test("部署文件齐全：Docker / compose / 一键脚本 / 安装说明", () => {
-  for (const rel of ["Dockerfile", ".dockerignore", "docker-compose.yml", ".env.example", "deploy.cmd", "deploy.sh", "INSTALL.md", "scripts/pack.mjs"]) {
+  for (const rel of ["Dockerfile", ".dockerignore", "docker-compose.yml", ".env.example", "deploy.cmd", "deploy.sh", "INSTALL.md", "scripts/release/pack.mjs"]) {
     assert.ok(existsSync(path.join(ROOT, rel)), rel + " 应该存在")
   }
   const pkg = JSON.parse(read("package.json"))
-  assert.equal(pkg.scripts.pack, "node scripts/pack.mjs")
+  assert.equal(pkg.scripts.pack, "node scripts/release/pack.mjs")
 })
 
 test("Dockerfile：非 root、暴露 7789、带健康检查、CMD 用 standalone 入口", () => {
@@ -39,16 +39,22 @@ test("docker-compose：端口、数据卷、重启策略与宿主 ComfyUI 通道
 })
 
 test("一键脚本都有三条路：本机 node / docker / 便携 node", () => {
-  const sh = read("deploy.sh")
+  // deploy.sh / deploy.cmd 是保留的老入口，只做转发；真正实现三条路的在 start.sh / start.cmd 里。
+  assert.match(read("deploy.sh"), /start\.sh/)
+  assert.match(read("deploy.cmd"), /start\.cmd/)
+
+  const sh = read("start.sh")
   assert.match(sh, /command -v node/)
+  assert.match(sh, /command -v nodejs/)
   assert.match(sh, /docker compose up --build/)
-  assert.match(sh, /server\/standalone\.mjs/)
-  const cmd = read("deploy.cmd")
+  assert.match(sh, /bin\/tagger\.mjs/)
+
+  const cmd = read("start.cmd")
   assert.match(cmd, /where node/)
   assert.match(cmd, /where docker/)
-  assert.match(cmd, /:usePortable/)
+  assert.match(cmd, /:ensureNode/)
   assert.match(cmd, /node-v%NODEVER%-win-x64\\node\.exe/)
-  assert.match(cmd, /standalone\.mjs/)
+  assert.match(cmd, /bin\\tagger\.mjs/)
 })
 
 test("便携包清单：带上跑起来要的一切，不带开发期杂物", () => {
@@ -56,7 +62,7 @@ test("便携包清单：带上跑起来要的一切，不带开发期杂物", ()
   for (const must of ["package.json", "index.js", "client.js", "server/standalone.mjs", "lib/forge/index.js", "lib/tags/loader.js", "data/tags/pose-view.jsonl", "server/public/app.js", "client/panel.js", "locale/zh.json", "Dockerfile", "deploy.cmd", "deploy.sh", "INSTALL.md"]) {
     assert.ok(files.includes(must), "清单里应该有 " + must)
   }
-  for (const banned of files.filter(f => f.startsWith("tests/") || f.startsWith("tools/") || f.startsWith("public-src/") || f.startsWith(".git/"))) {
+  for (const banned of files.filter(f => f.startsWith("tests/") || f.startsWith("scripts/release/") || f.startsWith("scripts/assets/") || f.startsWith("public-src/") || f.startsWith(".git/"))) {
     assert.fail("清单里不该有 " + banned)
   }
   assert.ok(files.length > 80, "清单不该只有几个文件，实际 " + files.length)

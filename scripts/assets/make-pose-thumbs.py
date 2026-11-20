@@ -1,7 +1,7 @@
 """Generate pose thumbnails for the DSh tagger picker.
 
 Reads <node>/img/<poseId>.png and writes <dataDir>/pose-thumbs/<poseId>.jpg (width 220).
-Run:  python make-pose-thumbs.py <nodeImgDir> <thumbDir>
+Run:  python scripts/assets/make-pose-thumbs.py <nodeImgDir> <thumbDir>
 """
 import os, sys
 from PIL import Image

@@ -1,5 +1,5 @@
 /**
- * scripts/run-tests.mjs — npm test 的统一入口。
+ * scripts/dev/run-tests.mjs — npm test 的统一入口。
  *
  * 为什么要包一层：几个套件会读写同一份词表目录，必须串行跑；但串行参数
  * --test-concurrency 是 Node 20.11 才有的，写死在 package.json 里会让 Node 18
@@ -12,7 +12,7 @@ import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
-const root = path.resolve(here, '..')
+const root = path.resolve(here, '..', '..')
 const testsDir = path.join(root, 'tests')
 
 const files = readdirSync(testsDir)
