@@ -9,7 +9,7 @@
 | --- | --- | --- |
 | `index.js` | 装配入口（`createRuntime` + HTTP 路由表） | `server/standalone.mjs` |
 | `lib/` | 运行时库：`tags/` `forge/` `refine/` `postprocess/` `comfy.js` `workflow-import.js` `mcp.js` `spi.js` `routes.js` `config.js` … | index.js / server/ |
-| `server/` | 独立 web 服务：`standalone.mjs`（入口）`shims.mjs`（可选服务垫片）`panel.html` + `public/`（面板静态资源） | 浏览器 / 容器 |
+| `server/` | 独立 web 服务：`standalone.mjs`（入口）`shims.mjs`（可选服务垫片）`panel.html` + `public/`（锻造台面板与姿势画廊的静态资源：面板的 `panel.css` / `api.js` / `state.js` / `render.js` / `settings.js` / `history.js` / `app.js`，画廊的 `gallery.html` / `gallery.css` / `gallery.js`） | 浏览器 / 容器 |
 | `data/tags/` | 随包补词表（四个主文件 + `seed/` 十三份） | `lib/tags/loader.js` |
 | `data/danbooru/` | 全量词表快照（五份 jsonl + `manifest.json`，由 `scripts/tags/import-dict.mjs` 导入，约 20MB）；公开版这里是 `filter-dict.mjs` 过滤出的 SFW 四份（无 `groups.jsonl`，`manifest.sfw === true`） | `lib/tags/loader.js` 探测顺序里的仓库那一条 |
 | `locale/` | 面板文案 `zh.json` / `en.json`（`server/public/i18n.js` 经 `GET /tagger/api/locale` 取） | 浏览器 |

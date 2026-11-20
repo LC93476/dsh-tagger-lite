@@ -24,6 +24,8 @@
 | POST | `/upload` | 参考图落进 ComfyUI 的 `input/`：body `{ filename, data, subfolder? }`（`data` 可带 `data:image/png;base64,` 前缀；`subfolder` 只能相对 `input/`）→ `{ ok, name, bytes, dir }`，`subfolder` 非空时 `name` 是 `refs/xxx.png` 这种 POSIX 相对路径 |
 | GET | `/poses` | 姿势目录（读 ai-pose-gallery-zh 的 catalog.csv）：`?set=sexy&q=侧坐&limit=40` |
 | GET | `/pose-thumb` | 姿势缩略图：`?id=full_sexy_P016_diag`，优先 `img/thumbs/<id>.jpg`（220px），没有就退回原图 `img/<id>.png`；id 只收 `[A-Za-z0-9_-]`，不合法或没这张直接 404 |
+| GET | `/pose-gallery` | 姿势画廊的分组数据：`?set=sexy&category=坐姿&angle=侧面&q=侧坐&limit=120&offset=0`；`limit` 默认 120、上限 400，返回 `total` / `shown` / `offset` / `sets` / `categories` / `angles` / `groups`（见下文「姿势画廊」） |
+| GET | `/pose-tags` | 选中一个姿势后该补哪些 tag：`?base=full_single_P041&angle=正面`（`ids` 可多选）；`base` 必填，错码 400 `bad-base` / 404 `no-pose` / 404 `no-variant` / 501 `pose-tags-unavailable` |
 | GET | `/job?id=` | 查询 `promptId` 状态与产物图 |
 | GET | `/image?filename=&subfolder=&type=` | **binary** 代理 ComfyUI 的 `/view` |
 | GET | `/tags?q=&limit=` | 标签检索 `{ rows, stats }` |
@@ -39,6 +41,7 @@
 | GET/HEAD | `/`、`/panel`、`/panel.html` | 面板 HTML（骨架，引用下面的 CSS/JS） |
 | GET/HEAD | `/public/panel.css`、`/public/api.js`、`/public/state.js`、`/public/app.js`（Phase 7 后还有 `render.js` `settings.js` `history.js`） | 面板静态资源，`Cache-Control: no-cache` + 强 ETag，可 304 |
 | GET/HEAD | `/about` | 信息页（健康状态 / 数据目录 / 接口清单），`no-store` |
+| GET/HEAD | `/gallery` | 姿势画廊页面（`server/public/gallery.html`），`no-store`；非 GET/HEAD 回 405 `method-not-allowed`。是这个页面自己的导航条上的入口，面板「出图」卡右上角也有「姿势画廊 ↗」 |
 
 `/public/*` 的缓存策略：**`no-cache` + 强 ETag**（`"<size 十六进制>-<mtimeMs 十六进制>"`）。
 浏览器可以留副本，但每次刷新都带 `If-None-Match` 复验：没改 → `304` 空 body；改了（size 或 mtime 变）→
@@ -299,6 +302,94 @@ curl -s 'http://127.0.0.1:PORT/tagger/api/poses?set=sexy&q=侧坐&limit=5'
   poses: [ { id:'full_sexy_P016_diag', set:'sexy', category:'坐姿', code:'P016', name:'侧坐・单手支撑・身体柔弯', angle:'斜侧' } ],
   launchDir: 'C:/ComfyUI' }
 ```
+
+### `GET /pose-gallery`
+
+姿势画廊的分组数据：一张一张线稿按「姿势组 × 角度」聚好再分页。`/poses` 给的是扁平行、`/pose-thumb` 给的是单张缩略图，
+这里给的是整页要画的东西 —— 一个姿势的正面 / 斜侧 / 侧面 / 俯视 / 仰视归到同一组，前端一次拿全。
+
+数据源与 `/poses` 同一个 catalog（同样按文件 mtime 缓存，换姿势库不用重启）；需要一个可用的 `comfy.launchDir`。
+
+| 参数 | 默认 | 说明 |
+| --- | --- | --- |
+| `set` | `""`（全部） | 体系：`standard`（全身单人·标准系）/ `sexy`（全身单人·性感系）/ `upper`（上半身单人）/ `couple`（双人缠绵）/ `other`（前缀不认识的历史条目） |
+| `category` | `""` | catalog 分类，精确匹配中文原样传，如 `坐姿`、`跪立・四肢着地` |
+| `angle` | `""` | `正面` / `斜侧` / `侧面` / `俯视` / `仰视`；给了就只回这个角度的 variant（`groups[i].count` 也跟着只数这个角度） |
+| `q` | `""` | 关键词，小写后子串匹配 名称 / 编号 / base / 分类 / variant id |
+| `limit` | `120` | 一次回多少**组**；≤0 或不合法按 120，超过 **400** 按 400 截 |
+| `offset` | `0` | 从第几组开始；≤0 或不合法按 0 |
+
+```bash
+curl -s 'http://127.0.0.1:PORT/tagger/api/pose-gallery?set=upper&limit=2&offset=0'
+```
+
+本机装了 ai-pose-gallery-zh（1439 张 / 288 组）时的真实输出，`variants` 只留第一条省篇幅：
+
+```js
+{ ok: true, total: 80, shown: 2, offset: 0,
+  sets: [ { key: 'all', label: '全部', count: 288 },
+          { key: 'standard', label: '全身单人·标准系', count: 73 },
+          { key: 'sexy', label: '全身单人·性感系', count: 80 },
+          { key: 'upper', label: '上半身单人', count: 80 },
+          { key: 'couple', label: '双人缠绵', count: 55 } ],
+  categories: [ { key: '性感・大胆系', count: 30 }, { key: '可爱系', count: 25 }, { key: '挤胸・强调事业线系', count: 25 } ],
+  angles: [ '正面', '斜侧', '侧面', '俯视', '仰视' ],
+  groups: [ {
+    base: 'upper80v2_P001', code: 'P001', name: '胸前双手比心',
+    set: 'upper', setLabel: '上半身单人', category: '可爱系', count: 5,
+    variants: [ {
+      id: 'upper80v2_P001_front', angle: '正面',
+      thumb: '/tagger/api/pose-thumb?id=upper80v2_P001_front',
+      image: '../../img/upper80v2_P001_front.png' } ] } ] }
+```
+
+- `total` 是**筛选后、分页前**的组数，`shown` 是本页实际回了几组；`offset` 原样回显，前端接着翻页。
+- `sets[].count` 一律是**组数**（不是张数），`all` 永远排第一；它的数字在 `category` / `angle` / `q` 之后、`set` 之前算，所以切体系时各档数字不跟着跳。
+- `categories[]` 只有 `key` 与 `count`（按组数降序，同数按名字排），跟着当前 `set` 走；`angles` 是固定五个角度、固定顺序。
+- `variants[].thumb` 就是 `/pose-thumb` 的地址，可直接当 `<img src>`；`variants[].image` 是 catalog 里的相对路径（原图，前端自己拼）。
+- 没配 `comfy.launchDir` 或目录不存在时不是错误：回 `{ ok: true, total: 0, shown: 0, offset: 0, sets: [{key:"all",count:0,…}], categories: [], angles: […], groups: [] }`，页面显示「没读到姿势库」。
+
+### `GET /pose-tags`
+
+挑中一个姿势后，提示词里该多带哪几个 tag。纯映射（`lib/pose-tags.js`）：不读盘、不查词表，先按
+体系 / 分类 / 名称关键词 / 角度推出候选，再用标签库校对每条（给中文与「在不在库里」）。
+
+| 参数 | 默认 | 说明 |
+| --- | --- | --- |
+| `base` | **必填** | 姿势组编号，不带角度后缀，如 `full_single_P041` |
+| `angle` | `正面` | 要哪一张：`正面` / `斜侧` / `侧面` / `俯视` / `仰视` |
+| `ids` | `""` | 逗号分隔的 variant id；**给了就按 id 取并忽略 `angle`**，可以一次要好几张 |
+
+```bash
+curl -s -G 'http://127.0.0.1:PORT/tagger/api/pose-tags' --data-urlencode 'base=upper80v2_P001' --data-urlencode 'angle=侧面'
+```
+
+真实输出（`items` 只留一张）：
+
+```js
+{ ok: true, base: 'upper80v2_P001', angle: '侧面',
+  set: 'upper', setLabel: '上半身单人', category: '可爱系', name: '胸前双手比心',
+  pose:   [ { tag: 'heart_hands', cn: '比心', matched: true } ],
+  camera: [ { tag: 'from_side', cn: '侧面视角', matched: true } ],
+  tags:   [ { tag: 'heart_hands', cn: '比心', matched: true },
+            { tag: 'from_side', cn: '侧面视角', matched: true } ],
+  reasons: [ '分类：可爱系 → heart_hands', '角度：侧面 → from_side' ],
+  items: [ { id: 'upper80v2_P001_side', angle: '侧面', pose: […], camera: […], tags: […], reasons: […] } ] }
+```
+
+- `pose` 是姿态词（体系 / 分类 / 名称关键词推出来的），`camera` 是角度对应的镜头词，`tags` 是两者按此顺序合并后的最终清单 —— 前端就贴 `tags`。
+- 每项是 `{ tag, cn, matched }`：`cn` 是标签库里的中文（查不到为空串），`matched: false` 表示这个词不在库里（映射表本身只在库里核对过的词上写，出现 false 一般是标签索引还没就绪）。
+- `reasons` 是给人看的来源说明（字符串数组），面板上就那么显示。
+- `items` 逐张一份（`ids` 多选时长度 > 1）；顶层那组 `pose` / `camera` / `tags` / `reasons` 取**第一张**，`angle` 也是第一张的角度。
+
+错码（都是 `ok: false`）：
+
+| 状态码 | `error` | 什么时候 |
+| --- | --- | --- |
+| 400 | `bad-base` | 没带 `base`（空串也算没带） |
+| 404 | `no-pose` | 姿势库里没有这个 base（`comfy.launchDir` 没配时也走这条） |
+| 404 | `no-variant` | 有这组但没有这个角度：回包里带 `angles`，列出实际有哪些 |
+| 501 | `pose-tags-unavailable` | 映射表没就绪（`lib/pose-tags.js` 缺席） |
 
 ## MCP
 

@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark light">
+<title>动作姿势库 · DSh Tagger</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22 viewBox=%220 0 16 16%22%3E%3Crect width=%2216%22 height=%2216%22 rx=%224%22 fill=%22%233b5bdb%22/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/public/gallery.css">
+</head>
+<body>
+<aside class="side">
+  <div class="brand">
+    <b>DSh Tagger</b>
+    <span class="brand-name">姿势画廊</span>
+    <em>tag 版（不跑 ControlNet）</em>
+  </div>
+  <nav class="nav" aria-label="主导航">
+    <p class="nav-h">工作台</p>
+    <a class="nav-i is-on" href="/gallery" aria-current="page">姿势画廊</a>
+    <a class="nav-i" href="/">锻造面板</a>
+    <p class="nav-h">图库</p>
+    <div class="nav-list" id="set-list"></div>
+    <p class="nav-h">说明</p>
+    <button class="nav-i" type="button" data-about="0">关于</button>
+    <button class="nav-i" type="button" data-about="1">来源</button>
+  </nav>
+  <div class="side-foot"><span id="version">—</span></div>
+</aside>
+
+<header class="top">
+  <span class="crumb">姿势画廊</span>
+  <a class="btn-ghost" href="/">打开锻造面板 ↗</a>
+</header>
+
+<main class="main">
+  <div class="head">
+    <h1>动作姿势库 <span class="badge" id="count-badge">0 组</span></h1>
+    <div class="seg" id="system-seg" role="tablist" aria-label="体系"></div>
+  </div>
+  <p class="sub">挑好姿势，直接拿到 Danbooru tag。缩略图来自本机姿势库，tag 版不跑 ControlNet。</p>
+  <p class="note" id="note" hidden></p>
+
+  <div class="pills" id="pills" aria-label="分类筛选"></div>
+
+  <div class="searchbar">
+    <label class="search">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"></circle><path d="M15.4 15.4 21 21"></path></svg>
+      <input id="q" type="search" placeholder="搜索姿势名称、编号（如 P001）、分类" autocomplete="off" spellcheck="false" aria-label="搜索姿势">
+    </label>
+    <select id="category" aria-label="分类"></select>
+    <div class="angles" id="angles" aria-label="视角"></div>
+    <button class="btn-ghost" id="reset" type="button">重置</button>
+  </div>
+
+  <div class="grid" id="grid"></div>
+  <div class="skeleton" id="skeleton" hidden aria-hidden="true"></div>
+  <div class="empty" id="empty" hidden>
+    <p>没有匹配的姿势。</p>
+    <p class="dim">换个关键词，或者点「重置」看全部。</p>
+  </div>
+  <div class="more"><button class="btn-ghost" id="more" type="button" hidden>加载更多</button></div>
+</main>
+
+<div class="dock" id="dock" hidden>
+  <div class="dock-thumb" id="dock-thumb-box">
+    <img id="dock-thumb" alt="">
+  </div>
+  <div class="dock-main">
+    <div class="dock-title"><b id="dock-name">—</b><span class="dim" id="dock-meta"></span></div>
+    <div class="dock-chips" id="dock-chips"></div>
+    <div class="dock-note" id="dock-note" hidden></div>
+  </div>
+  <div class="dock-actions">
+    <button class="btn" id="dock-copy" type="button">复制 tag</button>
+    <button class="btn primary" id="dock-fill" type="button">填入面板</button>
+    <button class="btn ghost" id="dock-clear" type="button">清空</button>
+  </div>
+</div>
+
+<div class="modal" id="about-modal" hidden>
+  <div class="modal-mask" data-close="1"></div>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="about-title">
+    <div class="modal-head">
+      <h2 id="about-title">关于这个页面</h2>
+      <button class="modal-x" id="about-close" type="button" aria-label="关闭">×</button>
+    </div>
+    <div class="modal-body">
+      <section>
+        <h3>这是什么</h3>
+        <p>挑一个姿势，直接拿到 Danbooru 风格的 tag。纯 tag 版：只读姿势缩略图与词表，不跑 ControlNet，也不生成深度图。</p>
+      </section>
+      <section id="about-source">
+        <h3>数据来源</h3>
+        <p>姿势素体来自 ai-pose-gallery-zh v2.0（素体白模 1,439 张）。原图作者 ギア（@giaaibusi），二次元服装 たき AI CharaDB，中文版维护 Anhao（@anhao_ai）。</p>
+      </section>
+      <section>
+        <h3>tag 怎么来的</h3>
+        <p>按「分类 + 名称关键词 + 视角」推出候选 tag，输出前再和本地词表核对一遍：词表里没有的词不会硬塞进提示词。</p>
+      </section>
+      <section>
+        <h3>免责与许可</h3>
+        <p>图库含 18+ 人体素体参考，仅供个人学习与人体动态研究使用；不得用于违法用途，或换脸等侵害他人的场景。素材禁止打包倒卖。</p>
+      </section>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" hidden role="status" aria-live="polite"></div>
+
+<script src="/public/gallery.js"></script>
+</body>
+</html>

@@ -34,11 +34,12 @@ HTTP/MCP 的逐条参数与示例不在这里，看 [`API.md`](./API.md)。
 | `lib/spi.js` | 扩展注册表（槽位 + 钩子） |
 | `lib/routes.js` | 路由表与 dispatch（前缀可换，支持旧前缀共存） |
 | `lib/config.js` | 默认配置与归一化（`DEFAULTS` + `normalize`） |
-| `lib/poses.js` | 姿势目录与缩略图查找（`createPoseCatalog` / `poseImage`） |
+| `lib/poses.js` | 姿势目录、缩略图与画廊分组（`createPoseCatalog` / `poseImage` / `poseGallery`） |
+| `lib/pose-tags.js` | 姿势 → tag 的纯映射表：`ANGLE_TAGS` / `CATEGORY_TAGS` / `NAME_HINTS` / `SET_TAGS` + `tagsForPose`（不读盘、不查词表，映射表里的词都在 `data/danbooru` 核对过） |
 | `server/standalone.mjs` | 独立 HTTP 服务入口（web 版）：起进程、挂 `/tagger/api` 路由、托管 `/public` |
 | `server/shims.mjs` | **纯 Cordis 生命周期垫片**：`createContext` + 8 个传输层名字再导出，≤12KB（有测试护栏） |
 | `lib/cordis/host.js` | 独立模式的 ctx 装配与织入：llm / webServer / tools 三个传输层的实现正文 |
-| `server/public/` | Web 面板静态资源，由独立服务的 `/public` 前缀提供（白名单扩展名 + 三重防穿越 + `no-cache`/ETag）：`panel.css` / `api.js` / `state.js` / `render.js`（灯 / 结果卡 / 错误码表）/ `settings.js`（LLM 与 ComfyUI 设置、工作流下拉、参考图行）/ `history.js`（历史、姿势弹窗、出图轮询、`localStorage` 参数记忆）/ `app.js`（只管 boot 与事件绑定） |
+| `server/public/` | Web 面板静态资源，由独立服务的 `/public` 前缀提供（白名单扩展名 + 三重防穿越 + `no-cache`/ETag）：`panel.css` / `api.js` / `state.js` / `render.js`（灯 / 结果卡 / 错误码表）/ `settings.js`（LLM 与 ComfyUI 设置、工作流下拉、参考图行）/ `history.js`（历史、姿势弹窗、出图轮询、`localStorage` 参数记忆）/ `app.js`（只管 boot 与事件绑定）/ `gallery.html` + `gallery.css` + `gallery.js`（姿势画廊页，`GET /gallery`，数据走 `/pose-gallery` 与 `/pose-tags`） |
 | `lib/seed-tags.js` | 内置 seed 词条的薄入口（`SEED_TAGS = loadSeedRows()`）；词条本体在 `data/tags/seed/seed-01..13-*.jsonl` |
 | `bin/tagger.mjs` | 唯一命令行入口 `dsh-tagger`：`--port` / `--host` / `--data-dir` / `--open|--no-open` / `--setup` / `--version` / `--help`，其余参数（`--base-url` 等）透传给 `server/standalone.mjs` |
 | `scripts/setup.mjs` | 首次运行向导（`npm run setup`）：端口 / 模型接口 baseUrl / API Key / model / ComfyUI 地址 / 工作流目录，**回车 = 跳过不写该键**；`--yes` 全默认、`--print` 只打印 |
@@ -145,6 +146,28 @@ comfy / forge / mcp 三个模块共用这一层；新增一个后端时必须复
 `/prompt-forge/api`（`LEGACY_PREFIX`）由同一个 dispatch 再注册一份，老脚本不用改。
 新增路由一律加进 `lib/routes.js` 的注册函数，别在 `index.js` 里另起分支。
 
+### 姿势画廊的两个接口（`lib/poses.js` + `lib/pose-tags.js`）
+
+两个都是纯读，不新增运行时服务：
+
+```js
+poseGallery({ launchDir, set, category, angle, q, limit, offset })
+// -> { total, shown, offset, sets, categories, angles, groups }
+//    groups[i]  = { base, code, name, set, setLabel, category, count, variants }
+//    variants[j] = { id, angle, thumb, image }
+tagsForPose({ base, code, name, category, angle, set })
+// -> { pose: string[], camera: string[], reasons: string[] }   纯函数：不读盘、不查词表
+```
+
+`limit` 默认 `120`、上限 `400`，`offset` 默认 `0`，越界值按默认 / 上限夹（不报错）。`groups` 是分页后的切片，
+`total` 是筛选后、分页前的组数；`sets[].count` 数的是**组**不是张；HTTP 层在返回里补 `ok: true`。
+
+`/pose-tags` 用 `rt.tags.canonicalizeMany()` 把 `pose` / `camera` 里的每个 tag 校成 `{ tag, cn, matched }`，
+合并成 `tags` 并逐张放进 `items`，顶层那组取第一张。错码：400 `bad-base`（没带 base）、404 `no-pose`（库里没有这组）、
+404 `no-variant`（有这组没这个角度，回包带 `angles`）、501 `pose-tags-unavailable`（`lib/pose-tags.js` 缺席时
+动态 import 失败 —— 这条路径不让整个 handlers 跟着崩，文件到位后下一次请求就能用，不用重启）。
+
+`launchDir` 仍取自 `config.comfy.launchDir`，所以 §9 的最小 ctx 不受影响。
 ## 5. 二次精修契约（`lib/refine.js`）
 
 ```js

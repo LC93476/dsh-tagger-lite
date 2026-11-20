@@ -368,6 +368,7 @@ try {
 }
 const SELF_DIR = path.dirname(fileURLToPath(import.meta.url))
 const PANEL_FILE = path.join(SELF_DIR, 'panel.html')
+const GALLERY_FILE = path.join(SELF_DIR, 'public', 'gallery.html')
 // 面板拆出来的静态资源（样式 / 脚本）：只从这里读，别的目录一律不认。
 const PUBLIC_DIR = path.resolve(SELF_DIR, 'public')
 // public 的真实路径（解软链后），第一次用到时算一次；算不出来就退回落差
@@ -531,6 +532,16 @@ function panelHtml() {
   }
 }
 
+/** 姿势画廊页面：同样每次读盘，读不到退回信息页。 */
+function galleryHtml() {
+  try {
+    return readFileSync(GALLERY_FILE, 'utf8')
+  } catch (error) {
+    rt.log.info('读不到 server/public/gallery.html，退回信息页：' + (error instanceof Error ? error.message : String(error)))
+    return htmlShell()
+  }
+}
+
 /** 注册一个只读 HTML 页面（GET / HEAD，no-store）。 */
 function registerHtmlPage(routePath, getHtml) {
   disposers.push(
@@ -557,6 +568,9 @@ function registerHtmlPage(routePath, getHtml) {
 
 // 面板的样式与脚本：server/public/ 下的普通文件，带 MIME 与路径穿越防护。
 disposers.push(webServer.register({ kind: 'prefix', path: '/public', handler: servePublic }))
+
+// 姿势画廊：单独的展示页（挑姿势拿 tag，不跑 ControlNet），HTML 与样式脚本都在 server/public 下。
+registerHtmlPage('/gallery', galleryHtml)
 
 // 面板：/ 与 /panel 都是锻造台；/about 是原来的信息页（健康状态 + 接口清单）。
 registerHtmlPage('/', panelHtml)

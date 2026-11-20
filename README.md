@@ -30,6 +30,8 @@ dsh-tagger/
 └─ Dockerfile  docker-compose.yml
 ```
 
+`server/` 里除锻造台面板外还有 `public/gallery.html`：姿势画廊页（`/gallery`），挑一个姿势就能拿到该补的 tag，不做骨架控制。
+
 ## 命令行
 
 ```bash

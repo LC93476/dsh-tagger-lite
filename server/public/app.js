@@ -43,15 +43,39 @@ async function bootInner() {
   await loadPoses();
   applyForgeToggles(s.config);
   if (Array.isArray(s.history) && s.history.length > 0) {
-    var last = s.history[0];
-    $("gen-status").textContent = T("ui.history.last", { seed: last.seed || "?", workflow: last.workflowId || "" });
+    var lastText = historyLine(s.history[0]);
+    if (lastText !== "") $("gen-status").textContent = lastText;
   }
   fillSettings(s.config);
   syncRefRow();
   loadUi();
+  // 画廊「填入面板」留的 tag：取一次就删，以后开面板不再覆盖手写内容
+  takePendingPrompt();
   // 模型档案清单也走 boot 这一次：接口缺席就只留空下拉，不阻塞后面
   await loadProfiles();
   await refreshLlmPillFromHealth();
+}
+/** 姿势画廊点「填入面板」时写的 tag 串：读出来填进 #text 并立刻删掉，避免下次开面板又盖掉手写内容。 */
+function takePendingPrompt() {
+  var key = "dsh-tagger:pending-prompt";
+  var text = "";
+  try {
+    text = window.localStorage.getItem(key) || "";
+    if (text !== "") window.localStorage.removeItem(key);
+  } catch (err) {
+    return;
+  }
+  if (text === "") return;
+  $("text").value = text;
+  $("text").focus();
+}
+/** 冷启动那行「历史里最近一条锻造」：history.json 存的是锻造记录（没有 seed / 工作流），所以只报模型与 tag 数。 */
+function historyLine(entry) {
+  if (!entry || typeof entry !== "object") return "";
+  var positive = typeof entry.positive === "string" ? entry.positive : "";
+  var n = positive.split(",").map(function (t) { return t.trim(); }).filter(function (t) { return t !== ""; }).length;
+  if (n === 0) return "";
+  return T("ui.history.last", { model: entry.model || "-", n: n });
 }
 /** 本地三道处理的开关：只有服务端明确关了才不打勾，缺字段按开。 */
 function applyForgeToggles(config) {

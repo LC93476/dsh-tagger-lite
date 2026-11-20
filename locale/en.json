@@ -213,7 +213,7 @@
   "ui.run.failed": "Failed: {text}",
   "ui.run.polling": "Queued / sampling… ({state})",
   "ui.run.queuePosition": " · queue #{n}",
-  "ui.history.last": "Latest in history: seed {seed} · {workflow}",
+  "ui.history.last": "Latest forge: {model} · {n} tag(s)",
   "ui.ref.uploading": "Uploading… ({size})",
   "ui.ref.readFailed": "Cannot read this file",
   "ui.ref.uploadFailed": "Upload failed: {text}",

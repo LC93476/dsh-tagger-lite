@@ -102,7 +102,7 @@ var I18N_BUILTIN_ZH = {
   "ui.run.failed": "失败：{text}",
   "ui.run.polling": "排队中 / 采样中…（{state}）",
   "ui.run.queuePosition": " · 队列第 {n}",
-  "ui.history.last": "历史里最近一条：seed {seed} · {workflow}",
+  "ui.history.last": "历史里最近一条锻造：{model} · {n} 个 tag",
   "ui.ref.uploading": "上传中…（{size}）",
   "ui.ref.readFailed": "读不出这个文件",
   "ui.ref.uploadFailed": "上传失败：{text}",

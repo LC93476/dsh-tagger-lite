@@ -769,3 +769,104 @@ test('面板：模型档案下拉（#model-profile）取清单、说明生效值
   await sandbox.changeProfile()
   assert.equal(calls.length, beforeBusy, '下拉禁用期间不重复提交')
 })
+
+test('姿势画廊：/gallery 是独立页，脚本样式齐全且一个外链都没有', { timeout: 60000 }, async () => {
+  const dataDir = await mkdtemp(path.join(tmpdir(), 'dsh-tagger-gallery-'))
+  /** @type {Record<string, string | undefined>} */
+  const env = { ...process.env, DSH_TAGGER_DATA: dataDir, ELECTRON_RUN_AS_NODE: '1' }
+  delete env.DSH_TAGGER_API_KEY
+  delete env.DSH_TAGGER_BASE_URL
+  delete env.DSH_TAGGER_MODEL
+
+  const child = spawnStandalone(['--port', '0', '--data-dir', dataDir], env)
+  try {
+    const url = await waitForReady(child)
+
+    const page = await fetch(url + '/gallery')
+    assert.equal(page.status, 200)
+    assert.ok((page.headers.get('content-type') ?? '').includes('text/html'), '/gallery 要按 HTML 提供')
+    assert.equal(page.headers.get('cache-control'), 'no-store', '画廊是页面，必须 no-store')
+    const html = await page.text()
+    assert.ok(html.includes('/public/gallery.js'), '画廊骨架要引用拆出去的脚本')
+    assert.ok(html.includes('/public/gallery.css'), '画廊骨架要引用拆出去的样式')
+    assert.ok(html.includes('动作姿势库'), '画廊 h1 是动作姿势库')
+    assert.ok(html.includes('tag 版'), '要标明这是 tag 版（不跑 ControlNet）')
+    for (const id of ['set-list', 'system-seg', 'count-badge', 'pills', 'q', 'category', 'angles', 'reset', 'grid', 'empty', 'more', 'dock', 'dock-chips', 'dock-copy', 'dock-fill', 'dock-clear']) {
+      assert.ok(html.includes('id="' + id + '"'), '画廊骨架要有 #' + id)
+    }
+    assert.equal(html.includes('http://') || html.includes('https://'), false, '画廊不许引外部域名（字体 CDN 之类）')
+
+    const jsRes = await fetch(url + '/public/gallery.js')
+    assert.equal(jsRes.status, 200)
+    assert.ok((jsRes.headers.get('content-type') ?? '').includes('javascript'), 'gallery.js 要按 JS 提供')
+    const jsText = await jsRes.text()
+    assert.equal(jsText.includes('http://') || jsText.includes('https://'), false, 'gallery.js 里不许出现外部地址')
+    assert.ok(jsText.includes("'/pose-gallery?'"), '主路径是 /tagger/api/pose-gallery')
+    assert.ok(jsText.includes("'/pose-tags?'"), 'tag 走 /tagger/api/pose-tags')
+    assert.ok(jsText.includes("'/pose-thumb?id='"), '缩略图走 /pose-thumb')
+    assert.ok(jsText.includes("'/poses?'"), '接口缺席时退回 /poses 分组（只做兜底）')
+    assert.ok(jsText.includes('dsh-tagger:pending-prompt'), '填入面板要写面板认的 localStorage 键')
+
+    const cssRes = await fetch(url + '/public/gallery.css')
+    assert.equal(cssRes.status, 200)
+    assert.ok((cssRes.headers.get('content-type') ?? '').includes('text/css'), 'gallery.css 要按 CSS 提供')
+    const cssText = await cssRes.text()
+    assert.ok(cssText.includes('repeat(auto-fill, minmax(196px, 1fr))'), '网格是 196px 自适应列')
+    assert.ok(cssText.includes('prefers-color-scheme'), '深色/浅色都要照顾')
+    assert.equal(cssText.includes('http://') || cssText.includes('https://'), false, '样式表不许引外部字体')
+
+    // 和白名单里其它页面一样：直连 .html 要 404，只能走 /gallery
+    const direct = await fetch(url + '/public/gallery.html')
+    assert.equal(direct.status, 404)
+    assert.equal((await direct.json()).ok, false)
+
+    const head = await fetch(url + '/gallery', { method: 'HEAD' })
+    assert.equal(head.status, 200)
+    assert.ok((head.headers.get('content-type') ?? '').includes('text/html'))
+  } finally {
+    await stop(child)
+    await rm(dataDir, { recursive: true, force: true })
+  }
+})
+
+test('姿势画廊收尾：侧栏无死链、关于/来源走页内弹层、计数带单位、文案不露接口名', () => {
+  const html = readFileSync(path.join(here, '..', 'server', 'public', 'gallery.html'), 'utf8')
+  const js = readFileSync(path.join(here, '..', 'server', 'public', 'gallery.js'), 'utf8')
+  const css = readFileSync(path.join(here, '..', 'server', 'public', 'gallery.css'), 'utf8')
+
+  assert.equal(html.includes('href="#tags"'), false, '词库总览是死链，这一轮整项删掉')
+  assert.equal(html.includes('词库总览'), false, '死链连同文案一起删')
+  assert.equal(html.includes('href="#about"') || html.includes('href="#source"'), false, '关于/来源不能再是空锚点')
+  assert.ok(html.includes('data-about="0"') && html.includes('data-about="1"'), '关于/来源改成按钮触发页内弹层')
+  assert.ok(html.includes('id="about-modal"'), '页内要有关于弹层')
+  assert.ok(html.includes('role="dialog"') && html.includes('aria-modal="true"'), '弹层要有对话框语义')
+  assert.ok(html.includes('id="about-source"'), '来源段落要能定位（点「来源」高亮它）')
+  for (const text of ['ai-pose-gallery-zh', 'ギア', 'たき', 'Anhao', '18+', '禁止打包倒卖', 'ControlNet']) {
+    assert.ok(html.includes(text), '关于弹层要写清 ' + text)
+  }
+  assert.ok(css.includes('.modal[hidden]'), '弹层隐藏要压过 display:grid')
+  assert.ok(css.includes('body.modal-on'), '打开弹层要锁住背景滚动')
+
+  assert.ok(js.includes('function openAbout(') && js.includes('function closeAbout('), '弹层要有开/关函数')
+  assert.ok(js.includes("ev.key === 'Escape'") && js.includes('closeAbout()'), 'Esc 要能关弹层')
+  assert.ok(js.includes("group.count + ' 视角'"), '卡片计数要带「视角」单位')
+  assert.equal(/gcard-count[^\n]*String\(group\.count\)/.test(js), false, '不要再直接显示裸数字')
+  assert.ok(js.includes('aria-keyshortcuts'), '卡片要提示可用 Enter/Space')
+  assert.equal(js.includes('（/tagger/api/pose-tags）'), false, '降级文案不许把接口名端给用户')
+  assert.equal(js.includes('正用 /poses'), false, '降级文案不许露 /poses')
+})
+
+test('面板：出图卡片带姿势画廊入口，骨架仍 <10KB 且原有 id 未丢', async () => {
+  const html = readFileSync(path.join(here, '..', 'server', 'panel.html'), 'utf8')
+  assert.ok(Buffer.byteLength(html) < 10240, '加完入口仍要小于 10KB，实际 ' + Buffer.byteLength(html))
+  assert.ok(html.includes('href="/gallery"'), '入口要指向 /gallery')
+  assert.ok(html.includes('target="_blank"'), '入口在新窗口打开')
+  assert.ok(html.includes('rel="noopener"'), '新窗口要带 noopener')
+  assert.ok(html.includes('姿势画廊'), '入口文案是姿势画廊')
+  for (const id of ['text', 'forge', 'positive', 'copy-pair', 'copy-pos', 'refine-text', 'refine', 'refine-delta', 'workflow', 'run', 'images', 'level', 'save-level', 'model-profile', 'pose-btn', 'cnstrength']) {
+    assert.ok(html.includes('id="' + id + '"'), '加入口不许弄丢 #' + id)
+  }
+  assert.ok(html.includes('/public/app.js'), '脚本引用还在')
+  assert.ok(html.includes('/public/i18n.js'), 'i18n 引用还在')
+})
+
