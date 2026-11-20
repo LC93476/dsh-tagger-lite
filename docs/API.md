@@ -20,7 +20,7 @@
 | GET | `/workflows` | 模板列表 `{ workflows, dir }` |
 | POST | `/workflows/import` | 导入自定义工作流：body `{ name, workflow, schema?, overwrite? }`（`workflow` 可以是对象或 JSON 字符串，`schema` 可省；也可以用 `{ path }` 直接给磁盘上的 json 文件）→ `{ ok, id, title, dir, workflowPath, schemaPath, nodes, created, workflows }`；只收 API 格式，UI 格式回 400 `ui-format`，同名回 409 `exists` |
 | POST | `/run` | 投递出图：body `{ workflowId, positive, negative, vars }` |
-| POST | `/upload` | 参考图落进 ComfyUI 的 `input/`：body `{ filename, data }`（`data` 可带 `data:image/png;base64,` 前缀）→ `{ ok, name, bytes, dir }` |
+| POST | `/upload` | 参考图落进 ComfyUI 的 `input/`：body `{ filename, data, subfolder? }`（`data` 可带 `data:image/png;base64,` 前缀；`subfolder` 只能相对 `input/`）→ `{ ok, name, bytes, dir }`，`subfolder` 非空时 `name` 是 `refs/xxx.png` 这种 POSIX 相对路径 |
 | GET | `/poses` | 姿势目录（读 ai-pose-gallery-zh 的 catalog.csv）：`?set=sexy&q=侧坐&limit=40` |
 | GET | `/pose-thumb` | 姿势缩略图：`?id=full_sexy_P016_diag`，优先 `img/thumbs/<id>.jpg`（220px），没有就退回原图 `img/<id>.png`；id 只收 `[A-Za-z0-9_-]`，不合法或没这张直接 404 |
 | GET | `/job?id=` | 查询 `promptId` 状态与产物图 |
@@ -221,7 +221,9 @@ curl -s http://127.0.0.1:PORT/tagger/api/run \
 | `image` | 节点 400 `image` | `/upload` 回的文件名，只认 `<ComfyUI>/input/` 下已有的文件 |
 | `cnStrength` | 节点 62 `strength` | 默认 0.45；越要像参考图就调高（0.5–0.7），只想借个姿态就压到 0.3 |
 
-`/upload` 的拒绝口径：扩展名只认 `.png/.jpg/.jpeg/.webp`（`error: bad-type`）、空内容 `empty-file`、超 24MB `too-large`、没配 `comfy.launchDir` 是 `no-launch-dir`（这项不知道 ComfyUI 装哪就没法写）。
+模板 schema 里的 `bindings` 支持三种写法：点号路径 `"62.strength"`、单节点对象 `{ "node": "62", "input": "strength" }`、以及变量名与输入名分开的 `{ "name": "cnStrength", "node": "62", "input": "strength" }`（也可以挂在变量上写成 `{ "name": "cnStrength", "bind": { "node": "62", "input": "strength" } }`）。`__proto__` / `constructor` / `prototype` 以及指向不存在节点的绑定一律被拒（记进 warnings，不会污染原型）。数值变量收到空串或纯空白时保留模板原值，不会被 `Number('')` 覆写成 0。
+
+`/upload` 的拒绝口径：扩展名只认 `.png/.jpg/.jpeg/.webp`（`error: bad-type`）、空内容 `empty-file`、超 24MB `too-large`、没配 `comfy.launchDir` 是 `no-launch-dir`（这项不知道 ComfyUI 装哪就没法写）、`subfolder` 带 `..`／绝对路径／盘符／NUL 是 `bad-path`（越界一律写不出去）。文件名里的路径会被剥掉，主名清洗后截断 48 字符，扩展名不参与截断 —— 再长的名字也保住 `.png`。
 
 拍照/网图都可以用 —— 深度提取只关心身体轮廓，穿不穿衣服、画风如何都不影响骨架；但背影、躺平这类糊成一团的构图，深度图分不出四肢，锁姿势效果会比站坐姿差。
 ### `GET /poses`
@@ -247,9 +249,9 @@ curl -s 'http://127.0.0.1:PORT/tagger/api/poses?set=sexy&q=侧坐&limit=5'
 | `forge_tags` | `text`（必需）、`negative`、`maxTags`、`syntax` | 白话 → WD/Camie 标签串（`syntax` 指定权重语法，缺省跟 `ui.weightSyntax`） |
 | `refine_tags` | `positive`（必需）、`instruction`（必需）、`negative`、`mode` | 对已有标签串做增量精修 |
 | `comfy_workflows` | 无 | 列出可用模板 |
-| `comfy_run` | `workflowId`、`positive`、`negative`、`vars`、`wait`、`timeoutMs` | 投递出图（`timeoutMs` 只在 `wait:true` 时生效；等待失败回 `error:"wait-failed"`，但 `submitted.promptId` 一定带回，可接着用 `comfy_status` 续查） |
-| `comfy_status` | `promptId` | 查询出图进度与产物 |
-| `tag_search` | `query`、`limit`、`kinds` | 标签检索（含中文）；`kinds` 取 `general` / `character` / `copyright` / `artist`，首次检索前会先等标签库就绪 |
+| `comfy_run` | `workflowId`、`positive`、`negative`、`vars`、`wait`、`timeoutMs` | 投递出图（`timeoutMs` 只在 `wait:true` 时生效；等待失败回 `error:"wait-failed"`，但 `submitted.promptId` 一定带回，可接着用 `comfy_status` 续查）。`wait:true` 的 `ok` 只在任务真出图（`ok` 且 `state:"done"`）时为真，任务失败会回 `ok:false` + `isError:true` |
+| `comfy_status` | `promptId` | 查询出图进度与产物；ComfyUI `/queue`、`/history` 返回非 200 时是 `ok:false` + `state:"unknown"`（不伪装成功），历史里出现 `execution_error` / `execution_interrupted` 一律判 `failed` |
+| `tag_search` | `q`、`limit`、`kinds` | 标签检索（含中文）；`kinds` 取 `general` / `character` / `copyright` / `artist`，首次检索前会先等标签库就绪 |
 
 标准 MCP 握手：
 

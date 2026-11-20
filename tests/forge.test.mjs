@@ -10,6 +10,8 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { createForge } from '../lib/forge.js'
+import { closeUnbalanced, repairJsonText } from '../lib/forge/parse.js'
+import { createPipelineRunner } from '../lib/forge/pipeline.js'
 import {
   PURGE_LEVELS,
   PURGE_LEVEL_LABELS,
@@ -587,7 +589,12 @@ test('标签索引未就绪 / canonicalizeMany 抛错：仍 ok:true，只记 war
   assert.equal(cold.positive, '1girl, solo')
   assert.equal(cold.tags.length, 2)
   assert.ok(cold.warnings.includes('标签库未就绪，未校对'))
-  assert.ok(cold.warnings.includes('标签库尚未就绪，本条未做全量校对'))
+  assert.equal(
+    cold.warnings.includes('标签库尚未就绪，本条未做全量校对'),
+    false,
+    '已经记过「未校对」就不该再补一条同义提示：' + JSON.stringify(cold.warnings),
+  )
+  assert.equal(cold.warnings.filter(text => text.includes('标签库')).length, 1, '冷索引只留一行：' + JSON.stringify(cold.warnings))
   assert.equal(cold.warnings.some(text => text.includes('不在库里')), false)
 
   const boomTags = {
@@ -628,4 +635,186 @@ test('结果带 pipeline 痕迹：词形修正、补进来的姿势词、整理�
   // 视角词不再被当上位词降权：from_behind / facing_away 都留满权重
   assert.equal(result.tags.find(item => item.tag === 'from_behind').weight, 1)
   assert.equal(result.tags.find(item => item.tag === 'facing_away').weight, 1)
+})
+
+test('repairJsonText：字符串内的撇号/冒号/斜杠原样透传，只修字符串外部', () => {
+  const raw = '{\n'
+    + '  "positive": ["worm\'s_eye_view", "fireman\'s_carry",],\n'
+    + '  "notes": \'斜杠 a//b、冒号 1:2 都原样\',\n'
+    + '}'
+  const text = repairJsonText(raw)
+  const parsed = JSON.parse(text)
+  assert.deepEqual(parsed.positive, ["worm's_eye_view", "fireman's_carry"])
+  assert.equal(parsed.notes, '斜杠 a//b、冒号 1:2 都原样')
+})
+
+test('repairJsonText：字符串外部的注释、单引号键、裸键仍照旧修掉', () => {
+  const text = repairJsonText('{positive: [\'a\' /* 注释 */, \'b\' // 行尾注释\n,], notes: \'x\'}')
+  assert.deepEqual(JSON.parse(text), { positive: ['a', 'b'], notes: 'x' })
+})
+
+test('closeUnbalanced：先清尾部悬空逗号/冒号/截断键名，再按栈逆序补括号', () => {
+  assert.equal(closeUnbalanced('{"positive":["1girl"],"notes":'), '{"positive":["1girl"]}')
+  assert.equal(closeUnbalanced('{"positive":["1girl"],"not'), '{"positive":["1girl"]}')
+  assert.equal(closeUnbalanced('{"positive":["1girl"],"notes":"'), '{"positive":["1girl"],"notes":""}')
+  assert.equal(closeUnbalanced('{"positive":["1girl",'), '{"positive":["1girl"]}')
+  // 数组里最后一个字符串是真 tag（值位置），不能当键名摘掉
+  assert.equal(closeUnbalanced('{"positive":["1girl"'), '{"positive":["1girl"]}')
+})
+
+test('坏 JSON：两撇号 tag + 尾逗号，generate 后两个 tag 都在', async () => {
+  const raw = '{"positive":[{"tag":"worm\'s_eye_view"},{"tag":"fireman\'s_carry"},],"notes":"两撇号"}'
+  const tags = fakeTags([...KNOWN, "worm's_eye_view", "fireman's_carry"])
+  const result = await makeForge({ llm: jsonStream(raw), tags }).generate({ text: '虫视角抱人' })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.repaired, true)
+  const got = result.tags.map(row => row.tag)
+  assert.ok(got.includes("worm's_eye_view"), JSON.stringify(got))
+  assert.ok(got.includes("fireman's_carry"), JSON.stringify(got))
+  assert.equal(result.notes, '两撇号')
+})
+
+test('取消时底层流抛原生 AbortError → error=aborted（不是 llm-error）', async () => {
+  const controller = new AbortController()
+  const llm = {
+    stream() {
+      return (async function* emit() {
+        yield { type: 'text-delta', index: 0, text: '{"positive":[' }
+        await new Promise((resolve, reject) => {
+          setTimeout(() => {
+            const error = /** @type {any} */ (new Error('The operation was aborted'))
+            error.name = 'AbortError'
+            error.code = 'ABORT_ERR'
+            reject(error)
+            controller.abort()
+          }, 30)
+        })
+      })()
+    },
+  }
+  const result = await makeForge({ config: makeConfig({ llm: { timeoutMs: 5000 } }), llm })
+    .generate({ text: '取消我', signal: controller.signal })
+
+  assert.equal(result.ok, false)
+  assert.equal(result.error, 'aborted')
+})
+
+test('底层流直接抛原生 AbortError：不误判成 llm-error，已收到的文本仍留在 raw', async () => {
+  const llm = {
+    stream() {
+      return (async function* emit() {
+        yield { type: 'text-delta', index: 0, text: '{"positive":[' }
+        const error = /** @type {any} */ (new Error('aborted by host'))
+        error.name = 'AbortError'
+        error.code = 'ABORT_ERR'
+        throw error
+      })()
+    },
+  }
+  const result = await makeForge({ llm }).generate({ text: '直接抛' })
+
+  assert.notEqual(result.error, 'llm-error')
+  assert.equal(result.raw, '{"positive":[')
+  assert.equal(result.error, 'empty-tags')
+})
+
+test('max-tokens 重试后第二次超时：只报 timeout，不说「重试成功」', async () => {
+  const calls = []
+  const llm = {
+    calls,
+    stream(options) {
+      calls.push(options)
+      const first = calls.length === 1
+      return (async function* emit() {
+        yield { type: 'text-delta', index: 0, text: '{"positive":[{"tag":"1girl"}' }
+        if (first) {
+          yield { type: 'finish', kind: 'max-tokens' }
+          return
+        }
+        // 第二次装死：把超时耗掉，模拟「重试也没救回来」
+        await new Promise(resolve => setTimeout(resolve, 1000))
+      })()
+    },
+  }
+  const result = await makeForge({ llm, config: makeConfig({ llm: { timeoutMs: 200 } }) }).generate({ text: '很长很细的描述' })
+
+  assert.equal(calls.length, 2, '截断后应该重试一次')
+  assert.equal(calls[1].maxTokens, 4400)
+  assert.equal(result.ok, false)
+  assert.equal(result.error, 'timeout')
+  assert.equal(result.warnings.some(text => text.includes('重试成功')), false, JSON.stringify(result.warnings))
+})
+
+test('多条 opts.negative 保序：按调用方写的顺序进 negativeTags', async () => {
+  const payload = { positive: [{ tag: '1girl' }] }
+  const result = await makeForge({ llm: jsonStream(payload) })
+    .generate({ text: 'x', options: { negative: 'worst_quality, lowres\n censored' } })
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(result.negativeTags.map(row => row.tag), ['worst_quality', 'lowres', 'censored'])
+  assert.equal(result.warnings.some(text => text.includes('不在库里')), false, JSON.stringify(result.warnings))
+})
+
+test('姿势补词只校对新增行：第①步词形修复记下的 raw 不被重校冲掉', async () => {
+  // 进来的行已经过 ①（fixer 把 top_down_bottom_up 修成 top-down_bottom-up 并留下 raw）。
+  const rows = [
+    { raw: 'top_down_bottom_up', tag: 'top-down_bottom-up', weight: 1, matched: true, kind: 'general' },
+  ]
+  const calls = []
+  const canonicalizeAll = async list => {
+    calls.push(list.map(row => row.tag))
+    return list.map(row => ({ raw: row.tag, tag: row.tag, weight: row.weight ?? 1, matched: true, kind: 'general', cn: '中文' }))
+  }
+  const runner = createPipelineRunner({
+    cfg: makeConfig(),
+    log: silent,
+    tags: fakeTags([...KNOWN, 'all_fours']),
+    canonicalizeAll,
+  })
+  const out = await runner.run({
+    rows,
+    described: '少女跪趴',
+    opts: { maxTags: 40, syntax: 'comfy', standards: ['wd', 'camie'] },
+    forgeCfg: { repair: false, postprocess: false },
+    warnings: [],
+    warnOnce: () => {},
+    quality: { enabled: false },
+  })
+
+  assert.deepEqual(calls, [['all_fours', 'kneeling']], '只给新补的行做校对，整表重校会冲掉 ① 的 raw')
+  assert.ok(out.rows.some(row => row.tag === 'all_fours'), '跪趴应补进 all_fours')
+  assert.ok(out.rows.some(row => row.tag === 'kneeling'), '跪趴应补进 kneeling')
+  const kept = out.rows.find(row => row.tag === 'top-down_bottom-up')
+  assert.equal(kept.raw, 'top_down_bottom_up', '① 记下的模型原拼写必须留着')
+  assert.deepEqual(out.info.poseHints.map(item => item.tag), ['all_fours', 'kneeling'])
+})
+
+test('withCn：库里没有的词不查、多条走一次批量查询', async () => {
+  const calls = []
+  const tags = fakeTags(KNOWN)
+  tags.canonicalizeMany = list => {
+    calls.push(list.slice())
+    return list.map(raw => ({ tag: tagKey(raw), cn: '中文:' + raw }))
+  }
+  let single = 0
+  tags.canonicalize = async () => {
+    single += 1
+    return { cn: '单查' }
+  }
+  const runner = createPipelineRunner({ cfg: makeConfig(), log: silent, tags, canonicalizeAll: async list => list })
+  const rows = [
+    { tag: '1girl', weight: 1, matched: true },
+    { tag: 'solo', weight: 1, matched: true },
+    { tag: 'gigantic_hat', weight: 1, matched: false },
+    { tag: 'smile', weight: 1, matched: true, cn: '微笑' },
+  ]
+
+  const out = await runner.withCn(rows)
+
+  assert.deepEqual(calls, [['1girl', 'solo']], '只查需要补的两条，且一批发出去')
+  assert.equal(single, 0, '有批量就不再逐条查')
+  assert.equal(out[0].cn, '中文:1girl')
+  assert.equal(out[2].cn, undefined, '库里没有的词不查也不补')
+  assert.equal(out[3].cn, '微笑', '已经有中文名的行原样留着')
 })

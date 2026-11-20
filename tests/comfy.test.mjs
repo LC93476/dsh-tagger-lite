@@ -16,6 +16,7 @@ import http from 'node:http'
 import os from 'node:os'
 import path from 'node:path'
 import { createComfyClient, resolveWorkflowDir, isUiFormat, resolveTextMapping, applyVars } from '../lib/comfy.js'
+import { bindingTargetOf, varsFromSchema } from '../lib/comfy/workflow.js'
 
 const REAL_BASE_URL = 'http://127.0.0.1:8188'
 const WORKBENCH_WORKFLOWS = path.join(os.homedir(), '.dsh-comfyui-workbench', 'workflows')
@@ -100,6 +101,8 @@ async function startFakeComfy() {
     queue: { queue_running: [], queue_pending: [] },
     history: {},
     promptResponse: { prompt_id: 'pid-1', number: 7, node_errors: {} },
+    queueStatus: 200,
+    historyStatus: 200,
     view: { status: 200, body: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a]), type: 'image/png' },
   }
   const server = http.createServer((req, res) => {
@@ -136,12 +139,12 @@ async function startFakeComfy() {
         return
       }
       if (url.pathname === '/queue') {
-        send(200, typeof state.queueFn === 'function' ? state.queueFn() : state.queue)
+        send(state.queueStatus, typeof state.queueFn === 'function' ? state.queueFn() : state.queue)
         return
       }
       if (url.pathname.startsWith('/history/')) {
         const id = decodeURIComponent(url.pathname.slice('/history/'.length))
-        send(200, state.history[id] === undefined ? {} : { [id]: state.history[id] })
+        send(state.historyStatus, state.history[id] === undefined ? {} : { [id]: state.history[id] })
         return
       }
       if (url.pathname === '/view') {
@@ -521,6 +524,49 @@ test('status：完成但没有保存节点时 state=done 且带一条提示', as
   }
 })
 
+test('status：/queue 或 /history 返 500 时 ok:false，不伪装成功', async () => {
+  const fake = await startFakeComfy()
+  try {
+    const client = clientFor({ baseUrl: fake.url })
+    fake.state.queueStatus = 500
+    const broken = await client.status('pid-1')
+    assert.equal(broken.ok, false)
+    assert.equal(broken.state, 'unknown')
+    assert.deepEqual(broken.images, [])
+    assert.equal(broken.status, 500)
+    assert.match(broken.message, /查队列失败.*500/)
+
+    fake.state.queueStatus = 200
+    fake.state.historyStatus = 502
+    const noHistory = await client.status('pid-2')
+    assert.equal(noHistory.ok, false)
+    assert.equal(noHistory.state, 'unknown')
+    assert.equal(noHistory.status, 502)
+    assert.match(noHistory.message, /查历史失败/)
+  } finally {
+    await fake.close()
+  }
+})
+
+test('status：status_str 没标 error，但 messages 里有 execution_interrupted 也判 failed', async () => {
+  const fake = await startFakeComfy()
+  try {
+    fake.state.history = {
+      'pid-i': {
+        prompt: [0, 'pid-i', {}, {}, []],
+        outputs: {},
+        // 真机上中断后 status_str 有时还是 success：只能看 messages
+        status: { status_str: 'success', completed: false, messages: [['execution_start', {}], ['execution_interrupted', { node_id: '8' }]] },
+      },
+    }
+    const result = await clientFor({ baseUrl: fake.url }).status('pid-i')
+    assert.equal(result.state, 'failed')
+    assert.match(result.message, /执行被中断/)
+  } finally {
+    await fake.close()
+  }
+})
+
 test('waitFor：轮询到 done，带 waitedMs', async () => {
   const fake = await startFakeComfy()
   try {
@@ -552,6 +598,31 @@ test('waitFor：一直排队则超时返回 timedOut + 最后状态', async () =
     // 轮询间隔 50ms，超时判定会略微早于 1000ms 一点，给个容差
     assert.ok(result.waitedMs >= 900, 'waitedMs=' + result.waitedMs)
     assert.match(result.message, /超时/)
+  } finally {
+    await fake.close()
+  }
+})
+
+test('waitFor：任务失败时 ok:false（到终态不等于成功）', async () => {
+  const fake = await startFakeComfy()
+  try {
+    fake.state.queue = { queue_running: [], queue_pending: [[2, 'pid-x', {}, {}, []]] }
+    const timer = setTimeout(() => {
+      fake.state.queue = { queue_running: [], queue_pending: [] }
+      fake.state.history = {
+        'pid-x': {
+          prompt: [0, 'pid-x', {}, {}, []],
+          outputs: {},
+          status: { status_str: 'error', completed: false, messages: [['execution_error', { exception_message: 'CUDA out of memory' }]] },
+        },
+      }
+    }, 120)
+    const result = await clientFor({ baseUrl: fake.url }).waitFor('pid-x', { timeoutMs: 4000, pollIntervalMs: 50 })
+    clearTimeout(timer)
+    assert.equal(result.state, 'failed')
+    assert.equal(result.timedOut, false)
+    assert.equal(result.ok, false, '失败的终态不能回 ok:true')
+    assert.match(result.message, /CUDA out of memory/)
   } finally {
     await fake.close()
   }
@@ -596,6 +667,71 @@ test('客户端只读配置：改 config.comfy 立刻生效（面板热改地址
   } finally {
     await fake.close()
   }
+})
+
+test('coerceVar：空串 / 纯空白不把数值参数覆写成 0', () => {
+  const schema = { vars: [{ name: 'seed', type: 'number' }, { name: 'width', type: 'number' }, { name: 'denoise', type: 'float' }] }
+  const workflow = fixtureWorkflow()
+  const warnings = []
+  const result = applyVars(workflow, schema, { seed: '', width: '   ', denoise: '' }, { positiveNode: '5', negativeNode: '6' }, warnings)
+  assert.equal(workflow['8'].inputs.seed, 123456789, '空串不能变成 0')
+  assert.equal(workflow['7'].inputs.width, 832, '纯空白也不能变成 0')
+  assert.equal(workflow['8'].inputs.denoise, 1)
+  assert.deepEqual(warnings, [])
+  assert.deepEqual(result.skipped, [], '保留原值不算丢弃')
+
+  const cleaned = fixtureWorkflow()
+  applyVars(cleaned, schema, { seed: ' 42 ' }, { positiveNode: '5', negativeNode: '6' })
+  assert.equal(cleaned['8'].inputs.seed, 42, '有值的字符串照旧转数字')
+
+  // 布尔声明：大小写都认（面板 / JSON 里写 TRUE / False 都见过）
+  const flags = { 12: { class_type: 'FlagNode', inputs: { enabled: true } } }
+  const boolSchema = { vars: [{ name: 'enabled', type: 'boolean' }] }
+  applyVars(flags, boolSchema, { enabled: 'FALSE' }, {})
+  assert.equal(flags[12].inputs.enabled, false)
+  applyVars(flags, boolSchema, { enabled: 'True' }, {})
+  assert.equal(flags[12].inputs.enabled, true)
+})
+
+test('applyVars：__proto__ / constructor / prototype 这些保留键被拦住，不污染原型', () => {
+  const workflow = fixtureWorkflow()
+  const warnings = []
+  const result = applyVars(workflow, null, {
+    '__proto__.polluted': 'yes',
+    'constructor.polluted': 'yes',
+    '8.__proto__': 'yes',
+  }, {}, warnings)
+  assert.equal({}.polluted, undefined, '原型链必须干净')
+  assert.equal(result.applied.length, 0)
+  assert.deepEqual(result.skipped.sort(), ['8.__proto__', '__proto__.polluted', 'constructor.polluted'])
+  assert.ok(warnings.some(item => item.includes('保留键')), warnings.join(' | '))
+})
+
+test('applyVars / varsFromSchema：单节点绑定 node + input（输入名可与变量名不同）', () => {
+  const workflow = {
+    15: { class_type: 'ControlNetApplyAdvanced', inputs: { strength: 0.5, control_net: ['1', 0] } },
+    60: { class_type: 'PoseGalleryNode', inputs: { image_id: 'full_sexy_P001_front' } },
+  }
+  const schema = {
+    vars: [
+      { name: 'cnStrength', type: 'number', node: '15', input: 'strength' },
+      { name: 'poseId', type: 'string', bind: { node: '60', input: 'image_id' } },
+    ],
+  }
+  assert.deepEqual(bindingTargetOf(schema.vars[0]), { node: '15', input: 'strength' })
+  assert.deepEqual(bindingTargetOf(schema.vars[1]), { node: '60', input: 'image_id' })
+
+  const warnings = []
+  const result = applyVars(workflow, schema, { cnStrength: '0.38', poseId: 'full_sexy_P016_diag' }, {}, warnings)
+  assert.equal(workflow['15'].inputs.strength, 0.38)
+  assert.equal(workflow['60'].inputs.image_id, 'full_sexy_P016_diag')
+  assert.deepEqual(result.applied.map(item => [item.name, item.node, item.input]), [['cnStrength', '15', 'strength'], ['poseId', '60', 'image_id']])
+  assert.deepEqual(warnings, [])
+
+  const fresh = { 15: { inputs: { strength: 0.62 } }, 60: { inputs: { image_id: 'thumb-x' } } }
+  const filled = varsFromSchema(schema, fresh, {})
+  assert.equal(filled[0].default, 0.62, '默认值要从绑定的输入名取')
+  assert.equal(filled[1].default, 'thumb-x')
 })
 
 test('applyVars：姿势变量写进节点 60 的 image_id，姿势标签节点的连线不动', () => {

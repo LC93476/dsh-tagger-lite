@@ -335,6 +335,29 @@ test('comfy_run：wait:true 但没出成图时 ok 跟 final 走', async () => {
   assert.equal(payload.submitted.ok, true, '投递本身是成功的，信息不该丢')
 })
 
+test('comfy_run：wait:true 但 final 是 failed（哪怕它自称 ok:true）也回 isError', async () => {
+  const comfy = makeComfy({ waitFor: { ok: true, state: 'failed', timedOut: false, message: '执行失败：CUDA out of memory' } })
+  const { handler } = build({ comfy })
+  const reply = await rpc(handler, 'tools/call', { name: 'comfy_run', arguments: { positive: '1girl', wait: true } })
+  assert.equal(reply.result.isError, true)
+  const payload = payloadOf(reply)
+  assert.equal(payload.ok, false)
+  assert.equal(payload.final.state, 'failed')
+  assert.match(payload.final.message, /CUDA out of memory/)
+  assert.equal(payload.submitted.ok, true, '投递成功的信息不丢')
+})
+
+test('comfy_run：comfy.baseUrl 是函数时错误文案取它的返回值', async () => {
+  const comfy = {
+    baseUrl: () => 'http://127.0.0.1:9999',
+    async submit() { throw new Error('socket hang up') },
+  }
+  const { handler } = build({ comfy })
+  const payload = payloadOf(await rpc(handler, 'tools/call', { name: 'comfy_run', arguments: { positive: '1girl' } }))
+  assert.equal(payload.error, 'submit-failed')
+  assert.match(payload.message, /127\.0\.0\.1:9999/)
+})
+
 test('comfy_run：空提示词 / 锻造失败 / 投递失败 / 投递抛错 都回 ok:false', async () => {
   const { handler, comfy } = build()
   const empty = payloadOf(await rpc(handler, 'tools/call', { name: 'comfy_run', arguments: { positive: '  ', negative: '' } }))

@@ -188,7 +188,7 @@ export function createForge({ config, llm, tags, logger, spi }) -> {
   ok, error?, message?,
   positive, negative,                  // 已按 weightSyntax 格式化；positive 以质量词开头，可直接进 CLIPTextEncode
   tags: [{ tag, weight, kind?, cn? }],
-  negativeTags: [...],
+  negativeTags: [...],                  // 顺序 = 调用方 opts.negative 的顺序，不再倒序
   standards: ["wd","camie"],
   pipeline: { repairs: [{from,to,how}], poseHints: [{tag,weight,hit}], changes: [{kind,tag,reason?}] },
   raw, repaired, model, provider, ms, usage?, notes?, warnings: []
