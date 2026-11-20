@@ -40,7 +40,7 @@ npm link && dsh-tagger --help # 用 bin 名，参数同 bin/tagger.mjs
 
 大词库（99447 条 Danbooru 词条）就放在仓库里：`data/danbooru/` 五份 jsonl，约 20MB，解压即用，不用配任何环境变量。
 
-换一份 / 刷新本机词表：`node scripts/tags/import-dict.mjs`（自动探测 `DSH_DANBOORU_DIR`、`~/.dsh-comfyui-workbench/data/danbooru`，也可 `--from <目录>`）；`--check` 校验仓库那份与源是否一致，`--dry` 只看计划，目标不同时默认拒绝、覆盖加 `--force`。
+换一份 / 刷新本机词表：`node scripts/tags/import-dict.mjs`（自动探测 `DSH_DANBOORU_DIR`、`~/.dsh-comfyui-workbench/data/danbooru`，也可 `--from <目录>`）；`--check` 只校验不写盘（有源比 sha256，没源就拿 `data/danbooru/manifest.json` 自检），`--dry` 只看计划，目标不同时默认拒绝、覆盖加 `--force`。
 
 运行时探测顺序：`--dict-dir` > `DSH_DANBOORU_DIR` > `DSH_COMFYUI_DATA_DIR` > `~/.dsh-comfyui-workbench/data{,/danbooru}` > 仓库的 `data/danbooru` > 父目录的 `dsh-comfyui-workbench/data{,/danbooru}` > 当前目录的 `dsh-comfyui-workbench/data/danbooru` > `<数据目录>/tags`。
 

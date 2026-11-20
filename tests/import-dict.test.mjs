@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { compareDict, importDict, inspectDictDir, main, parseArgs, resolveSourceDir } from '../scripts/tags/import-dict.mjs'
+import { checkManifest, compareDict, importDict, inspectDictDir, main, parseArgs, resolveSourceDir } from '../scripts/tags/import-dict.mjs'
 
 function tmpDir() {
   return mkdtempSync(path.join(os.tmpdir(), 'dict-import-'))
@@ -150,4 +150,24 @@ test('main：参数错与找不到源目录都退 2，--help 退 0', () => {
   assert.equal(main(['--nope'], io), 2)
   assert.equal(main(['--help'], io), 0)
   assert.equal(main(['--from', path.join(os.tmpdir(), 'definitely-missing-dict-' + Date.now())], io), 2)
+})
+test('--check 没有源目录时拿 manifest.json 自检：一致 0 / 被改过 1 / 缺 manifest 2', () => {
+  const from = makeSource(3)
+  const to = path.join(tmpDir(), 'data', 'danbooru')
+  importDict({ from, to, min: 1 })
+  const self = checkManifest(to)
+  assert.equal(self.ok, true)
+  assert.equal(self.code, 'manifest-ok')
+  assert.equal(self.files.length, 2)
+  const io = { out: () => {}, err: () => {} }
+  assert.equal(main(['--to', to, '--check', '--quiet'], io), 0)
+  writeFileSync(path.join(to, 'general.jsonl'), JSON.stringify({ tag: 'tampered' }) + '\n')
+  const diff = checkManifest(to)
+  assert.equal(diff.ok, false)
+  assert.equal(diff.code, 'manifest-diff')
+  assert.deepEqual(diff.differ, ['general.jsonl'])
+  assert.equal(main(['--to', to, '--check', '--quiet'], io), 1)
+  rmSync(path.join(to, 'manifest.json'))
+  assert.equal(checkManifest(to).code, 'no-manifest')
+  assert.equal(main(['--to', to, '--check', '--quiet'], io), 2)
 })

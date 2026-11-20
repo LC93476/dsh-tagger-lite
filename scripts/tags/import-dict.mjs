@@ -65,7 +65,8 @@ export function usageText() {
     "                  ~/.dsh-comfyui-workbench/data/danbooru）",
     "  --to <目录>     目标目录（默认 <仓库>/data/danbooru）",
     "  --min <行数>    general.jsonl 的行数下限，默认 " + MIN_GENERAL_LINES + "（防拿错目录）",
-    "  --check         只校验一致性，不写盘；不一致退出码 1",
+    "  --check         只校验一致性，不写盘；不一致退出码 1。没有源目录时拿",
+    "                  仓库里的 manifest.json 自检（新 clone / CI 可用）",
     "  --dry           只打印计划",
     "  --force         目标已存在且内容不同时覆盖",
     "  --json          输出机器可读结果",
@@ -153,6 +154,51 @@ export function compareDict(source, target) {
   return out
 }
 
+/**
+ * 自检仓库里那份快照：拿 manifest.json 记的 sha256 与行数逐份核对。
+ * 没有源目录的机器（新 clone / CI）也能用它确认 data/danbooru 没被改坏。
+ */
+export function checkManifest(dir) {
+  const manifestFile = path.join(dir, "manifest.json")
+  const empty = { ok: false, files: [], missing: [], differ: [] }
+  if (!existsSync(manifestFile)) {
+    return { ...empty, code: "no-manifest", message: "没有 manifest.json：" + manifestFile }
+  }
+  let manifest
+  try { manifest = JSON.parse(readFileSync(manifestFile, "utf8")) } catch (err) {
+    return { ...empty, code: "no-manifest", message: "manifest.json 解析失败：" + err.message }
+  }
+  const list = Array.isArray(manifest.files) ? manifest.files : []
+  const missing = []
+  const differ = []
+  const files = []
+  for (const item of list) {
+    const name = item && typeof item.name === "string" ? item.name : ""
+    if (name === "") continue
+    const abs = path.join(dir, name)
+    if (!existsSync(abs)) { missing.push(name); continue }
+    const text = readFileSync(abs, "utf8")
+    const entry = {
+      name,
+      lines: text.split(/\r?\n/).filter(line => line.trim() !== "").length,
+      tags: 0,
+      bytes: Buffer.byteLength(text, "utf8"),
+      sha256: sha256(text),
+    }
+    files.push(entry)
+    if (typeof item.sha256 === "string" && item.sha256 !== entry.sha256) differ.push(name)
+    if (typeof item.lines === "number" && item.lines !== entry.lines) {
+      if (!differ.includes(name)) differ.push(name)
+    }
+  }
+  const ok = list.length > 0 && missing.length === 0 && differ.length === 0
+  const parts = []
+  if (list.length === 0) parts.push("manifest 里没有文件记录")
+  if (missing.length > 0) parts.push("缺 " + missing.join(" / "))
+  if (differ.length > 0) parts.push("改动过 " + differ.join(" / "))
+  return { ok, code: ok ? "manifest-ok" : "manifest-diff", message: ok ? "仓库快照与 manifest 一致（" + files.length + " 份）" : "仓库快照与 manifest 不符：" + parts.join("；"), files, missing, differ }
+}
+
 function writeAtomic(file, data) {
   const tmp = file + ".tmp-" + process.pid + "-" + Date.now()
   try {
@@ -177,6 +223,11 @@ export function importDict(options = {}) {
     dry = false,
     min = MIN_GENERAL_LINES,
   } = options
+  // 没有源目录也能 --check：直接拿仓库里的 manifest.json 自检（新 clone / CI 的常见场景）。
+  if (check && (from === "" || !existsSync(from))) {
+    const self = checkManifest(to)
+    return { ok: self.ok, code: self.code, message: self.message, source: from, target: to, files: self.files, written: [], skipped: [], check: true, missing: self.missing, differ: self.differ }
+  }
   const source = inspectDictDir(from, min)
   if (!source.ok) {
     return { ok: false, code: source.problems[0].code, message: source.problems[0].message, source: source.dir, target: to, files: [], written: [], skipped: [], check }
@@ -228,7 +279,7 @@ export function main(argv = process.argv.slice(2), io = { out: console.log, err:
   }
   if (opts.help) { io.out(usageText()); return 0 }
   const from = resolveSourceDir(opts.from)
-  if (from === "") {
+  if (from === "" && !opts.check) {
     io.err("没找到词表目录：用 --from 指定，或设 DSH_DANBOORU_DIR，或把它放到 ~/.dsh-comfyui-workbench/data/danbooru")
     return 2
   }
@@ -242,7 +293,7 @@ export function main(argv = process.argv.slice(2), io = { out: console.log, err:
   }
   if (result.ok) { if (!opts.quiet) io.out("✓ " + result.message); return 0 }
   io.err("✗ " + result.message)
-  return result.code === "different" ? 1 : 2
+  return result.code === "different" || result.code === "manifest-diff" ? 1 : 2
 }
 
 const invoked = process.argv[1] ? path.resolve(process.argv[1]) : ""
