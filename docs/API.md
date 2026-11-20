@@ -235,21 +235,21 @@ curl -s 'http://127.0.0.1:PORT/tagger/api/poses?set=sexy&q=侧坐&limit=5'
 ```js
 { ok: true, total: 1439, sets: ['couple','sexy','standard','upper'],
   poses: [ { id:'full_sexy_P016_diag', set:'sexy', category:'坐姿', code:'P016', name:'侧坐・单手支撑・身体柔弯', angle:'斜侧' } ],
-  launchDir: 'D:/QUARK/ComfyUI-aki-v3.2/ComfyUI' }
+  launchDir: 'C:/ComfyUI' }
 ```
 
 ## MCP
 
-端点：`POST /tagger/api/mcp`，JSON-RPC 2.0，`SERVER_INFO = { name: 'dsh-tagger', version: '0.2.0' }`。
+端点：`POST /tagger/api/mcp`，JSON-RPC 2.0，`SERVER_INFO = { name: 'dsh-tagger', version }` —— version 读根 `package.json`（读不到才回兜底 `0.2.0`），发版只改一处。
 
 | 工具 | 参数 | 用途 |
 | --- | --- | --- |
-| `forge_tags` | `text`（必需）、`negative`、`maxTags` | 白话 → WD/Camie 标签串 |
+| `forge_tags` | `text`（必需）、`negative`、`maxTags`、`syntax` | 白话 → WD/Camie 标签串（`syntax` 指定权重语法，缺省跟 `ui.weightSyntax`） |
 | `refine_tags` | `positive`（必需）、`instruction`（必需）、`negative`、`mode` | 对已有标签串做增量精修 |
 | `comfy_workflows` | 无 | 列出可用模板 |
-| `comfy_run` | `workflowId`、`positive`、`negative`、`vars` | 投递出图 |
+| `comfy_run` | `workflowId`、`positive`、`negative`、`vars`、`wait`、`timeoutMs` | 投递出图（`timeoutMs` 只在 `wait:true` 时生效；等待失败回 `error:"wait-failed"`，但 `submitted.promptId` 一定带回，可接着用 `comfy_status` 续查） |
 | `comfy_status` | `promptId` | 查询出图进度与产物 |
-| `tag_search` | `query`、`limit` | 标签检索（含中文） |
+| `tag_search` | `query`、`limit`、`kinds` | 标签检索（含中文）；`kinds` 取 `general` / `character` / `copyright` / `artist`，首次检索前会先等标签库就绪 |
 
 标准 MCP 握手：
 

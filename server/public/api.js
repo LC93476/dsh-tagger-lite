@@ -2,14 +2,30 @@
 /**
  * server/public/api.js — 面板的 HTTP 层。
  *
- * 一个 BASE、一个 api()，坏响应统一折成 { ok:false, message }，让上层永远拿到结构化的东西。
+ * 一个 BASE、一个 api()。请求永远不外抛：断网 / 超时 / DNS 失败都折成
+ * { status: 0, data: { ok:false, error:"network", message } }，上层只管看 status 与 data。
+ * 头是合并而不是覆盖：默认只在有 body 的方法上带 content-type，GET / HEAD 不带。
  * 以普通 script 加载（不是 module），后面的 i18n.js / state.js / app.js 直接用这里的全局。
  * 坏响应的文案走 T('ui.error.response')（i18n.js 在本文件之后加载，调用发生在运行时，所以拿得到）。
  */
 var BASE = "/tagger/api";
+/** 头名大小写不敏感：调用方写了 Content-Type 也算「已指定」。 */
+function hasHeader(headers, name) {
+  var want = String(name).toLowerCase();
+  return Object.keys(headers || {}).some(function (k) { return String(k).toLowerCase() === want });
+}
 async function api(path, init) {
-  var options = Object.assign({ headers: { "content-type": "application/json" } }, init || {});
-  var res = await fetch(BASE + path, options);
+  var options = init || {};
+  var method = String(options.method || "GET").toUpperCase();
+  var headers = Object.assign({}, options.headers || {});
+  if (method !== "GET" && method !== "HEAD" && !hasHeader(headers, "content-type")) headers["content-type"] = "application/json";
+  var res;
+  try {
+    res = await fetch(BASE + path, Object.assign({}, options, { method: method, headers: headers }));
+  } catch (err) {
+    var message = err && err.message ? String(err.message) : String(err);
+    return { status: 0, data: { ok: false, error: "network", message: message } };
+  }
   var data = {};
   try { data = await res.json() } catch (e) { data = { ok: false, message: typeof T === "function" ? T("ui.error.response", { status: res.status }) : String(res.status) } }
   return { status: res.status, data: data };

@@ -21,7 +21,14 @@
  * 这张表只放 configView 里没有、又必须有兜底的出图变量。
  */
 var DEFAULT_VARS = { width: 1200, height: 1800, seed: 20261108, steps: 30, cfg: 5.03 };
-var state = { result: null, workflows: [], timer: null, refName: "", poses: [], poseIndex: {}, poseSet: "", poseQuery: "", lastWid: "" };
+var state = {
+  result: null, workflows: [], timer: null, refName: "",
+  poses: [], poseIndex: {}, poseSet: "", poseQuery: "", lastWid: "",
+  // 出图轮询令牌：每次新任务/新一次轮询递增，回来的旧响应靠它丢弃。
+  pollSeq: 0, pollFails: 0,
+  // 顶栏两盏灯最近一次的状态，切语言时据此重画（不去重新探测服务）。
+  llmPill: { ready: false, model: "" }, comfyPill: { ok: false, version: "" }
+};
 function $(id) { return document.getElementById(id) }
 function trimNum(n) { return String(Math.round(n * 1000) / 1000) }
 function pairOf(t) {
@@ -61,22 +68,40 @@ function readVars() {
     var n = fieldNum(id);
     if (n !== null) vars[id] = n;
   });
-  // 只有姿势类模板才有 pose / cnStrength 变量，别的模板塞进去会被丢掉并留 warning。
-  var wid = $("workflow").value || "";
-  if (wid.indexOf("pose") >= 0) {
+  // 模板声明了哪些变量才塞哪些：塞了模板没有的会被服务端丢掉并留 warning。
+  var caps = workflowCaps($("workflow").value || "");
+  if (caps.pose) {
     var pose = $("pose").value;
     if (pose) vars.pose = pose;
   }
-  // 参考图模板：image 写进 LoadImage，cnStrength 决定「多听参考图的」
-  if (wid.indexOf("ref") >= 0) {
-    if (state.refName) vars.image = state.refName;
-    var refStrength = fieldNum("cnstrength");
-    if (refStrength !== null) vars.cnStrength = refStrength;
-  } else if (wid.indexOf("pose") >= 0 && wid.indexOf("posetags") < 0) {
+  // 参考图模板：image 写进 LoadImage
+  if (caps.image && state.refName) vars.image = state.refName;
+  // cnStrength 决定「多听参考图的 / 多听骨架的」
+  if (caps.cnStrength) {
     var strength = fieldNum("cnstrength");
     if (strength !== null) vars.cnStrength = strength;
   }
   return vars;
+}
+/** 投给 ComfyUI 的正向串：优先用户手改过的 #positive，空则回退标签拼出来的那份。 */
+function effectivePositive() {
+  var el = $("positive");
+  var manual = el && typeof el.value === "string" ? el.value.trim() : "";
+  return manual !== "" ? manual : positiveText();
+}
+/** 模板能力：优先看模板自己声明的 vars，没声明才回退到 id 子串（老模板 / 列表还没到时）。 */
+function workflowCaps(wid) {
+  var id = String(wid || "");
+  var wf = null;
+  (state.workflows || []).forEach(function (w) { if (w && w.id === id) wf = w });
+  var vars = wf && Array.isArray(wf.vars) ? wf.vars : [];
+  if (vars.length) {
+    function has(name) { return vars.some(function (v) { return v && v.name === name }) }
+    return { image: has("image"), pose: has("pose"), cnStrength: has("cnStrength"), declared: true };
+  }
+  var isRef = id.indexOf("ref") >= 0;
+  var isPose = id.indexOf("pose") >= 0;
+  return { image: isRef, pose: isPose, cnStrength: isRef || (isPose && id.indexOf("posetags") < 0), declared: false };
 }
 /** 锻造要的「最多标签数」：没填就交给服务端默认（tags.maxTags）。 */
 function readMaxTags() {
@@ -84,11 +109,15 @@ function readMaxTags() {
   if (n === null) return null;
   return Math.round(n);
 }
-/** CN 强度的两档：姿势模板的骨架默认值，与参考图模板写在 data-boost 上的更高值。 */
+/**
+ * CN 强度的两档：base 永远取面板 HTML 上写的 defaultValue（不是用户当前值），
+ * boost 取 data-boost。这样参考图模板切回普通模板时能回到骨架默认强度。
+ */
 function cnStrengthPair() {
-  var base = fieldNum("cnstrength");
-  if (base === null) base = 0;
   var el = $("cnstrength");
+  var rawBase = el && typeof el.defaultValue === "string" ? el.defaultValue.trim() : "";
+  var base = rawBase === "" ? 0 : Number(rawBase);
+  if (!Number.isFinite(base)) base = 0;
   var raw = el && el.dataset ? el.dataset.boost : "";
   var boost = raw === "" || raw === undefined ? base : Number(raw);
   if (!Number.isFinite(boost)) boost = base;

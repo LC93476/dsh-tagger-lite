@@ -34,8 +34,8 @@
     <hr class="sep">
     <div class="grid2">
       <label class="wide">ComfyUI 地址<input id="comfy-baseurl" placeholder="http://127.0.0.1:8188" spellcheck="false"></label>
-      <label class="wide">安装目录（点「启动 ComfyUI」用的工作目录）<input id="comfy-dir" placeholder="D:\QUARK\ComfyUI-aki-v3.2\ComfyUI" spellcheck="false"></label>
-      <label class="wide">python 路径<input id="comfy-python" placeholder="D:\QUARK\ComfyUI-aki-v3.2\python\python.exe" spellcheck="false"></label>
+      <label class="wide">安装目录（点「启动 ComfyUI」用的工作目录）<input id="comfy-dir" placeholder="C:\ComfyUI" spellcheck="false"></label>
+      <label class="wide">python 路径<input id="comfy-python" placeholder="C:\ComfyUI\python\python.exe" spellcheck="false"></label>
       <label class="wide">工作流模板目录<input id="comfy-workflows" placeholder="C:\Users\你\.dsh-comfyui-workbench\workflows" spellcheck="false"></label>
       <label>默认工作流 id<input id="comfy-default" placeholder="feiyue-sam3-posetags" spellcheck="false"></label>
     </div>
@@ -58,6 +58,7 @@
         <option value="max">max</option>
       </select></label>
       <button id="save-level" class="ghost">应用档位</button>
+      <span class="hint" id="level-status" style="margin:0"></span>
       <label title="库里查不到的多词会被改成连字符/撇号写法">词形修复 <input id="fg-repair" type="checkbox" checked></label>
       <label title="去重、上位词降权、质量词置顶、按 14 段稳定排序">去重合序 <input id="fg-postprocess" type="checkbox" checked></label>
       <label title="白话里点到的姿势/视角，直接从本地词库补进来">姿势补全 <input id="fg-posehints" type="checkbox" checked></label>

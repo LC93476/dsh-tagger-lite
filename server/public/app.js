@@ -13,7 +13,7 @@
  *
  * 各层都是普通 script 共享全局函数，跨文件调用只在「运行时」发生，所以加载顺序只要满足
  * 「定义在调用之前」即可；这里不做模块打包，改完刷新浏览器就生效。
- * 界面文案一律 T('ui.…')，本文件不写死中文；换语言就重跑 boot，动态部分跟着重渲染。
+ * 界面文案一律 T('ui.…')，本文件不写死中文；换语言走 relocalize() 就地重画，不重跑 boot。
  */
 async function boot() {
   try {
@@ -23,8 +23,8 @@ async function boot() {
   } catch (err) {
     // 任何一步炸了都要把状态灯点亮成红色，不能一屏「读取中」骗人。
     var why = err && err.message ? err.message : String(err);
-    setPill("llm-pill", "err", T("ui.boot.llmFailed", { why: why }));
-    setPill("comfy-pill", "err", T("ui.boot.comfyFailed"));
+    refreshLlmPill(false, "");
+    setComfyPill(false, "");
     $("lamp-text").textContent = T("ui.boot.lampFailed");
     $("gen-status").className = "hint err";
     $("gen-status").textContent = T("ui.boot.failed", { why: why });
@@ -32,12 +32,13 @@ async function boot() {
 }
 /** 冷启动只打一个状态接口：/state 一次给全 config / purge / comfy / workflows / history。 */
 async function bootInner() {
+  document.documentElement.lang = typeof i18nLang === "function" ? i18nLang() : "zh";
+  document.title = T("ui.head.title");
   var st = await api("/state");
   var s = st.data || {};
   setLamp(s.purge);
   var comfy = s.comfy || {};
-  if (comfy.ok === true) setPill("comfy-pill", "ok", T("ui.comfy.pillOk", { version: comfy.version || T("ui.common.online") }));
-  else setPill("comfy-pill", "err", T("ui.comfy.pillDown"));
+  setComfyPill(comfy.ok, comfy.version);
   fillWorkflows(s.workflows, s.config && s.config.comfy ? s.config.comfy.defaultWorkflowId : "");
   await loadPoses();
   applyForgeToggles(s.config);
@@ -67,92 +68,110 @@ async function refreshLlmPillFromHealth() {
   refreshLlmPill(h.llmReady === true, h.llm && h.llm.model);
 }
 async function doForge() {
+  var btn = $("forge");
+  if (btn.disabled) return;
   var text = $("text").value.trim();
   if (text === "") { $("forge-status").className = "hint err"; $("forge-status").textContent = T("ui.forge.emptyText"); return }
-  var btn = $("forge");
   btn.disabled = true;
   $("forge-status").className = "hint";
   $("forge-status").textContent = T("ui.forge.running");
   var started = Date.now();
-  var options = {};
-  var maxTags = readMaxTags();
-  if (maxTags !== null) options.maxTags = maxTags;
-  var res = await api("/forge", { method: "POST", body: JSON.stringify({ text: text, options: options }) });
-  btn.disabled = false;
-  var d = res.data || {};
-  if (d.ok !== true) {
-    $("forge-status").className = "hint err";
-    $("forge-status").textContent = T("ui.forge.failed", { text: errText(d, res.status) });
-    return;
+  try {
+    var options = {};
+    var maxTags = readMaxTags();
+    if (maxTags !== null) options.maxTags = maxTags;
+    var res = await api("/forge", { method: "POST", body: JSON.stringify({ text: text, options: options }) });
+    var d = res.data || {};
+    if (d.ok !== true) {
+      $("forge-status").className = "hint err";
+      $("forge-status").textContent = T("ui.forge.failed", { text: errText(d, res.status) });
+      return;
+    }
+    state.result = d;
+    renderResult();
+    $("refine-delta").textContent = "";
+    $("forge-status").className = "hint";
+    $("forge-status").textContent = T("ui.common.doneSecs", { s: ((Date.now() - started) / 1000).toFixed(1) });
+  } finally {
+    // 成功、失败、异常、断网都要把按钮放回去，否则一次网络抖动就把面板锁死。
+    btn.disabled = false;
   }
-  state.result = d;
-  renderResult();
-  $("refine-delta").textContent = "";
-  $("forge-status").className = "hint";
-  $("forge-status").textContent = T("ui.common.doneSecs", { s: ((Date.now() - started) / 1000).toFixed(1) });
 }
 async function doRefine() {
-  if (!state.result) return;
+  var btn = $("refine");
+  if (btn.disabled) return;
+  var positive = effectivePositive();
+  if (positive === "") { $("refine-status").className = "hint err"; $("refine-status").textContent = T("ui.run.noPositive"); return }
   var instruction = $("refine-text").value.trim();
   if (instruction === "") { $("refine-status").className = "hint err"; $("refine-status").textContent = T("ui.refine.emptyInstruction"); return }
-  var btn = $("refine");
   btn.disabled = true;
   $("refine-status").className = "hint";
   $("refine-status").textContent = T("ui.refine.running");
-  var res = await api("/refine", {
-    method: "POST",
-    body: JSON.stringify({
-      positive: positiveText(),
-      negative: "",
-      instruction: instruction,
-      mode: $("refine-mode").value
-    })
-  });
-  btn.disabled = false;
-  var d = res.data || {};
-  if (d.ok !== true) {
-    $("refine-status").className = "hint err";
-    $("refine-status").textContent = T("ui.refine.failedPrefix", { text: errText(d, res.status) });
-    return;
+  try {
+    var res = await api("/refine", {
+      method: "POST",
+      body: JSON.stringify({
+        positive: positive,
+        negative: "",
+        instruction: instruction,
+        mode: $("refine-mode").value
+      })
+    });
+    var d = res.data || {};
+    if (d.ok !== true) {
+      $("refine-status").className = "hint err";
+      $("refine-status").textContent = T("ui.refine.failedPrefix", { text: errText(d, res.status) });
+      return;
+    }
+    state.result = Object.assign({}, state.result, { tags: d.tags, positive: d.positive, negative: d.negative });
+    renderResult();
+    $("refine-status").className = "hint";
+    $("refine-status").textContent = T("ui.common.doneMs", { ms: d.ms || 0 }) + (d.notes ? " · " + d.notes : "");
+    var delta = d.delta || {};
+    var lines = [];
+    if ((delta.added || []).length) lines.push("+ " + delta.added.join(", "));
+    if ((delta.removed || []).length) lines.push("- " + delta.removed.join(", "));
+    (delta.weighted || []).forEach(function (w) { lines.push("~ " + w.tag + " " + w.from + " → " + w.to) });
+    (d.warnings || []).forEach(function (w) { lines.push("! " + w) });
+    $("refine-delta").textContent = lines.length ? lines.join("\n") : T("ui.refine.noChange");
+  } finally {
+    btn.disabled = false;
   }
-  state.result = Object.assign({}, state.result, { tags: d.tags, positive: d.positive, negative: d.negative });
-  renderResult();
-  $("refine-status").className = "hint";
-  $("refine-status").textContent = T("ui.common.doneMs", { ms: d.ms || 0 }) + (d.notes ? " · " + d.notes : "");
-  var delta = d.delta || {};
-  var lines = [];
-  if ((delta.added || []).length) lines.push("+ " + delta.added.join(", "));
-  if ((delta.removed || []).length) lines.push("- " + delta.removed.join(", "));
-  (delta.weighted || []).forEach(function (w) { lines.push("~ " + w.tag + " " + w.from + " → " + w.to) });
-  (d.warnings || []).forEach(function (w) { lines.push("! " + w) });
-  $("refine-delta").textContent = lines.length ? lines.join("\n") : T("ui.refine.noChange");
 }
 async function doRun() {
+  var btn = $("run");
+  if (btn.disabled) return;
   var workflowId = $("workflow").value;
   if (!workflowId) { $("gen-status").className = "hint err"; $("gen-status").textContent = T("ui.run.noWorkflow"); return }
-  if (!state.result) {
+  // 正向串可以是手改的 #positive，不再要求先锻造过（有标签只是默认值）。
+  var positive = effectivePositive();
+  if (positive === "") {
     $("gen-status").className = "hint err";
     $("gen-status").textContent = T("ui.run.noPositive");
     return;
   }
-  var btn = $("run");
   btn.disabled = true;
   $("gen-status").className = "hint";
   $("gen-status").textContent = T("ui.run.submitting");
-  var res = await api("/run", {
-    method: "POST",
-    body: JSON.stringify({ workflowId: workflowId, positive: positiveText(), negative: "", vars: readVars() })
-  });
-  btn.disabled = false;
-  var d = res.data || {};
-  if (d.ok !== true) {
-    $("gen-status").className = "hint err";
-    $("gen-status").textContent = T("ui.run.submitFailed", { text: errText(d, res.status) });
-    return;
+  var promptId = "";
+  try {
+    var res = await api("/run", {
+      method: "POST",
+      body: JSON.stringify({ workflowId: workflowId, positive: positive, negative: "", vars: readVars() })
+    });
+    var d = res.data || {};
+    if (d.ok !== true) {
+      $("gen-status").className = "hint err";
+      $("gen-status").textContent = T("ui.run.submitFailed", { text: errText(d, res.status) });
+      return;
+    }
+    promptId = d.promptId;
+    $("gen-status").className = "hint";
+    $("gen-status").textContent = T("ui.run.submitted", { id: promptId });
+  } finally {
+    btn.disabled = false;
   }
-  $("gen-status").className = "hint";
-  $("gen-status").textContent = T("ui.run.submitted", { id: d.promptId });
-  pollJob(d.promptId);
+  pollJob(promptId);
 }
 /* ── 事件绑定 ───────────────────────────────────────────────────────── */
 function bind(id, fn) { $(id).addEventListener("click", fn) }
@@ -182,27 +201,107 @@ bind("comfy-ping", pingComfy);
 bind("comfy-launch", launchComfy);
 bind("wf-import", doWorkflowImport);
 $("wf-file").addEventListener("change", pickWorkflowFiles);
-// 复制成功提示：1 秒后把按钮文案复原（文案来自字典，切语言后下一次重渲染自然跟上）
+// 复制：优先 Clipboard API；拿不到或被拒时退回隐藏 textarea + execCommand（http 来源 / 无权限时常见）。
+function copyText(text) {
+  var payload = String(text == null ? "" : text);
+  var attempt = null;
+  try {
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") attempt = navigator.clipboard.writeText(payload);
+  } catch (e) { attempt = null }
+  if (!attempt || typeof attempt.then !== "function") return Promise.resolve(legacyCopy(payload));
+  return Promise.resolve(attempt).then(function () { return true }, function () { return legacyCopy(payload) });
+}
+function legacyCopy(payload) {
+  var ta = document.createElement("textarea");
+  ta.value = payload;
+  ta.setAttribute("readonly", "");
+  ta.style.position = "fixed";
+  ta.style.top = "-1000px";
+  ta.style.opacity = "0";
+  document.body.appendChild(ta);
+  var ok = false;
+  try { ta.select(); ok = document.execCommand("copy") !== false } catch (e) { ok = false }
+  document.body.removeChild(ta);
+  return ok;
+}
+// 每个按钮一个 toast timer：连点两次时先清掉上一次的复原，免得把新文案提前抹掉。
 var COPY_TOAST_MS = 1000;
-$("copy-pair").addEventListener("click", function () { navigator.clipboard.writeText($("pairs").value); $("copy-pair").textContent = T("ui.common.copied"); setTimeout(function () { $("copy-pair").textContent = T("ui.common.copy") }, COPY_TOAST_MS) });
-$("copy-pos").addEventListener("click", function () { navigator.clipboard.writeText($("positive").value); $("copy-pos").textContent = T("ui.common.copied"); setTimeout(function () { $("copy-pos").textContent = T("ui.common.copy") }, COPY_TOAST_MS) });
+var copyTimers = {};
+function copyToast(id, ok) {
+  var btn = $(id);
+  if (!btn) return;
+  if (copyTimers[id]) clearTimeout(copyTimers[id]);
+  btn.textContent = ok === false ? T("action.copyFailed") : T("ui.common.copied");
+  copyTimers[id] = setTimeout(function () {
+    delete copyTimers[id];
+    btn.textContent = T("ui.common.copy");
+  }, COPY_TOAST_MS);
+}
+$("copy-pair").addEventListener("click", function () { copyText($("pairs").value).then(function (ok) { copyToast("copy-pair", ok) }) });
+$("copy-pos").addEventListener("click", function () { copyText($("positive").value).then(function (ok) { copyToast("copy-pos", ok) }) });
+/** 破甲档位旁的状态位：HTML 里没写就在按钮后面补一个（只补一次）。 */
+function levelStatusEl() {
+  var el = $("level-status");
+  if (el) return el;
+  var btn = $("save-level");
+  if (!btn || !btn.parentNode) return null;
+  el = document.createElement("span");
+  el.id = "level-status";
+  el.className = "hint";
+  el.style.margin = "0";
+  btn.parentNode.insertBefore(el, btn.nextSibling);
+  return el;
+}
 $("save-level").addEventListener("click", async function () {
-  var res = await api("/purge", { method: "POST", body: JSON.stringify({ purge: { enabled: $("level").value !== "off", level: $("level").value } }) });
-  if (res.data && res.data.purge) setLamp(res.data.purge);
+  var btn = $("save-level");
+  if (btn.disabled) return;
+  var statusEl = levelStatusEl();
+  btn.disabled = true;
+  try {
+    var res = await api("/purge", { method: "POST", body: JSON.stringify({ purge: { enabled: $("level").value !== "off", level: $("level").value } }) });
+    var d = res.data || {};
+    if (d.purge) {
+      setLamp(d.purge);
+      if (statusEl) setStatus("level-status", T("ui.forge.applyLevel"), false);
+    } else if (statusEl) {
+      // 档位没生效必须说出来，不能点了像没反应。
+      setStatus("level-status", errText(d, res.status), true);
+    }
+  } finally {
+    btn.disabled = false;
+  }
 });
-$("text").addEventListener("keydown", function (e) { if ((e.ctrlKey || e.metaKey) && e.key === "Enter") doForge() });
-// 参数改了就记住：下次开面板还在原样（工作流本身由 fillWorkflows 自己 syncRefRow）
-UI_FIELDS.concat(["workflow"]).forEach(function (id) {
+$("text").addEventListener("keydown", function (e) {
+  // 输入法组字中的 Enter 是「选词」，不是提交。
+  if (e.isComposing || e.keyCode === 229) return;
+  if ((e.ctrlKey || e.metaKey) && e.key === "Enter") doForge();
+});
+// 参数改了就记住：下次开面板还在原样（工作流由上面那条 change 统一做 syncRefRow + saveUi，这里不重复绑）
+UI_FIELDS.forEach(function (id) {
   var el = $(id);
   if (!el) return;
   el.addEventListener("change", saveUi);
 });
-$("refine-text").addEventListener("keydown", function (e) { if (e.key === "Enter") doRefine() });
-// 换语言：记住选择 + 换字典 + 重写静态文案，再重跑 boot 把动态部分（状态灯、结果、提示）重渲染一遍。
+$("refine-text").addEventListener("keydown", function (e) {
+  if (e.isComposing || e.keyCode === 229) return;
+  if (e.key === "Enter") doRefine();
+});
+/** 换语言：只换字典与看得见的文案，服务状态沿用最近一次探测的结果（不重跑 boot、不丢表单）。 */
+function relocalize() {
+  document.documentElement.lang = typeof i18nLang === "function" ? i18nLang() : "zh";
+  document.title = T("ui.head.title");
+  if (typeof i18nApplyStatic === "function") i18nApplyStatic();
+  refreshLlmPill(state.llmPill.ready, state.llmPill.model);
+  setComfyPill(state.comfyPill.ok, state.comfyPill.version);
+  fillWorkflows(state.workflows, $("workflow").value || "");
+  renderPoseSets();
+  syncPoseBtn();
+  if (state.result) renderResult();
+}
 if ($("lang")) {
   $("lang").addEventListener("change", async function (e) {
     await i18nSetLang(e.target.value);
-    boot();
+    relocalize();
   });
 }
 boot();

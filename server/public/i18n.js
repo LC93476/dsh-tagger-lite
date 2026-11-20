@@ -16,6 +16,7 @@ var I18N_BUILTIN_ZH = {
   "ui.lang.label": "语言",
   "ui.common.copy": "复制",
   "ui.common.copied": "已复制",
+  "action.copyFailed": "复制失败",
   "ui.common.close": "关闭",
   "ui.common.online": "在线",
   "ui.common.ready": "就绪",
@@ -36,9 +37,9 @@ var I18N_BUILTIN_ZH = {
   "ui.settings.testLlm": "测试连接",
   "ui.settings.comfyBaseUrl": "ComfyUI 地址",
   "ui.settings.launchDir": "安装目录（点「启动 ComfyUI」用的工作目录）",
-  "ui.settings.launchDirPlaceholder": "D:\\QUARK\\ComfyUI-aki-v3.2\\ComfyUI",
+  "ui.settings.launchDirPlaceholder": "C:\\ComfyUI",
   "ui.settings.pythonPath": "python 路径",
-  "ui.settings.pythonPlaceholder": "D:\\QUARK\\ComfyUI-aki-v3.2\\python\\python.exe",
+  "ui.settings.pythonPlaceholder": "C:\\ComfyUI\\python\\python.exe",
   "ui.settings.workflowDir": "工作流模板目录",
   "ui.settings.workflowDirPlaceholder": "C:\\Users\\你\\.dsh-comfyui-workbench\\workflows",
   "ui.settings.defaultWorkflow": "默认工作流 id",
@@ -166,6 +167,7 @@ var I18N_BUILTIN_ZH = {
   "ui.error.code": "出错（{code}）",
   "ui.error.generic": "出错",
   "ui.error.http": "（HTTP {status}）",
+  "error.network": "网络请求失败",
   "err.no-llm": "没配置模型接口：设置里填 Base URL + API Key（独立服务也可以用 DSH_TAGGER_* 环境变量）",
   "err.no-api-key": "缺 API Key：设置 → 接口密钥",
   "err.no-base-url": "缺接口地址：设置 → Base URL（比如 https://api.deepseek.com）",
@@ -587,7 +589,7 @@ async function i18nSetLang(lang) {
   i18nWriteLang(I18N_LANGS.indexOf(lang) >= 0 ? lang : "zh");
   await i18nLoad(lang);
   i18nApplyStatic();
-  var sel = $("lang");
+  var sel = document.getElementById("lang");
   if (sel && sel.value !== i18n.lang) sel.value = i18n.lang;
   i18n.listeners.forEach(function (fn) { try { fn(i18n.lang) } catch (e) { /* 监听器自己炸不该拖垮切换 */ } });
   return i18n.lang;
@@ -597,7 +599,7 @@ async function i18nStart() {
   var lang = i18nReadLang();
   try { await i18nLoad(lang) } catch (e) { i18n.dict = {} }
   i18nApplyStatic();
-  var sel = $("lang");
+  var sel = document.getElementById("lang");
   if (sel) sel.value = i18n.lang;
   return i18n.lang;
 }

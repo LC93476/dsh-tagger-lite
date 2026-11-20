@@ -86,6 +86,7 @@ var ERR_TEXT = {
   "bad-llm": "err.bad-llm",
   "http-400": "err.http-400",
   "timeout": "err.timeout",
+  "network": "error.network",
   "bad-json": "err.bad-json",
   "empty-text": "err.empty-text",
   "empty-prompt": "err.empty-prompt",
@@ -121,6 +122,8 @@ function errText(data, status) {
   var code = String(d.error || "");
   var key = ERR_TEXT[code] || "";
   var human = key ? T(key) : "";
+  // 字典里没这个键时 T() 会把键名原样吐回来：这种内部名字不能端给用户，退回泛化文案。
+  if (key && human === key) human = T("ui.error.generic");
   var detail = String(d.message || "").trim();
   var parts = [];
   if (human) parts.push(human);

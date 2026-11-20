@@ -156,10 +156,10 @@ function selectPose(id) {
   $("pose").value = id;
   syncPoseBtn();
   $("pose-modal").hidden = true;
+  saveUi();
 }
 function openPoseModal() {
-  var wid = $("workflow").value || "";
-  if (wid.indexOf("pose") < 0) {
+  if (!workflowCaps($("workflow").value || "").pose) {
     $("gen-status").className = "hint err";
     $("gen-status").textContent = T("ui.pose.notPoseWorkflow");
     return;
@@ -191,20 +191,37 @@ function renderImages(images) {
 }
 async function pollJob(promptId) {
   if (state.timer) clearTimeout(state.timer);
+  // 每次轮询领一个令牌：新任务会把 state.pollSeq 顶掉，回来的旧响应据此丢弃。
+  var seq = ++state.pollSeq;
   var res = await api("/job?id=" + encodeURIComponent(promptId));
+  if (seq !== state.pollSeq) return;
   var d = res.data || {};
+  var status = $("gen-status");
+  // 连续 3 次「HTTP 错误 / 接口说 ok:false」就停，别拿同一个坏请求一直打。
+  if (res.status >= 400 || d.ok === false) {
+    state.pollFails += 1;
+    if (state.pollFails >= 3) {
+      status.className = "hint err";
+      status.textContent = errText(d, res.status);
+      return;
+    }
+  } else {
+    state.pollFails = 0;
+  }
   if (d.state === "done" || d.state === "success" || (d.images || []).length > 0) {
-    $("gen-status").textContent = T("ui.run.done", { n: (d.images || []).length });
+    state.pollFails = 0;
+    status.textContent = T("ui.run.done", { n: (d.images || []).length });
     renderImages(d.images);
     return;
   }
   if (d.state === "failed" || d.state === "error") {
-    $("gen-status").className = "hint err";
-    $("gen-status").textContent = T("ui.run.failed", { text: (errText(d, res.status) + " · " + (d.state || "")).replace(/ · $/, "") });
+    state.pollFails = 0;
+    status.className = "hint err";
+    status.textContent = T("ui.run.failed", { text: (errText(d, res.status) + " · " + (d.state || "")).replace(/ · $/, "") });
     return;
   }
   var queue = d.queuePosition ? T("ui.run.queuePosition", { n: d.queuePosition }) : "";
-  $("gen-status").textContent = T("ui.run.polling", { state: (d.state || "?") + queue });
+  status.textContent = T("ui.run.polling", { state: (d.state || "?") + queue });
   state.timer = setTimeout(function () { pollJob(promptId) }, 3000);
 }
 /* ── 参数记忆：桌面版是全屏工具，关掉浏览器再回来还要接着用 ──────────── */
@@ -214,6 +231,8 @@ function saveUi() {
   try {
     var box = { workflow: $("workflow").value || "" };
     UI_FIELDS.forEach(function (id) { if ($(id)) box[id] = $(id).value });
+    // 姿势不在 UI_FIELDS 里（它是下拉 + 弹窗），单独记一份 id。
+    if ($("pose")) box.pose = $("pose").value || "";
     localStorage.setItem(LS_KEY, JSON.stringify(box));
   } catch (e) { /* 无痕/禁用存储：不影响功能 */ }
 }
@@ -230,5 +249,11 @@ function loadUi() {
   var wid = typeof box.workflow === "string" ? box.workflow : "";
   var known = state.workflows.some(function (w) { return w.id === wid });
   if (wid !== "" && known) $("workflow").value = wid;
+  // 姿势列表可能还没加载 / 换了词库：只有这个 id 现在确实存在才恢复。
+  var pose = typeof box.pose === "string" ? box.pose : "";
+  if (pose !== "" && state.poseIndex[pose] && $("pose")) {
+    $("pose").value = pose;
+    syncPoseBtn();
+  }
   syncRefRow();
 }

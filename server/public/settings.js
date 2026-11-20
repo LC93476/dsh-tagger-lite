@@ -6,9 +6,16 @@
  * 与「把表单内容存回服务端」，外加工作流下拉与 ComfyUI 三件事（探活 / 保存 / 启动）。
  * 界面文案一律 T('ui.…')，本文件不写死中文。
  */
+/** 顶栏两盏灯的唯二写入口：顺手记下状态，切语言时据此重画（不必重新探测服务）。 */
 function refreshLlmPill(ready, model) {
-  if (ready === true) setPill("llm-pill", "ok", T("ui.llm.pillOk", { model: model || T("ui.common.ready") }));
+  state.llmPill = { ready: ready === true, model: model || "" };
+  if (ready === true) setPill("llm-pill", "ok", T("ui.llm.pillOk", { model: state.llmPill.model || T("ui.common.ready") }));
   else setPill("llm-pill", "warn", T("ui.llm.pillMissing"));
+}
+function setComfyPill(ok, version) {
+  state.comfyPill = { ok: ok === true, version: version || "" };
+  if (state.comfyPill.ok) setPill("comfy-pill", "ok", T("ui.comfy.pillOk", { version: state.comfyPill.version || T("ui.common.online") }));
+  else setPill("comfy-pill", "err", T("ui.comfy.pillDown"));
 }
 function fillWorkflows(list, def) {
   state.workflows = list || [];
@@ -17,7 +24,7 @@ function fillWorkflows(list, def) {
   state.workflows.forEach(function (w) {
     var o = document.createElement("option");
     o.value = w.id;
-    var needsImage = String(w.id).indexOf("ref") >= 0 || (Array.isArray(w.vars) && w.vars.some(function (v) { return v && v.name === "image" }));
+    var needsImage = workflowCaps(w.id).image;
     o.textContent = (w.title ? w.id + " · " + w.title : w.id) + (needsImage ? T("ui.ref.badge") : "");
     sel.appendChild(o);
   });
@@ -33,7 +40,8 @@ function fillWorkflows(list, def) {
 /** 参考图行随模板变：不用参考图的模板置灰并说明，姿势行只在姿势模板里露出来。 */
 function syncRefRow() {
   var wid = $("workflow").value || "";
-  var isRef = wid.indexOf("ref") >= 0;
+  var caps = workflowCaps(wid);
+  var isRef = caps.image;
   $("ref-row").style.display = "";
   $("ref-row").style.opacity = isRef ? "" : "0.5";
   $("ref-file").disabled = !isRef;
@@ -48,7 +56,7 @@ function syncRefRow() {
     $("ref-status").textContent = T("ui.ref.hintDisabled");
     $("ref-preview").style.display = "none";
   }
-  $("pose").parentNode.style.display = (wid.indexOf("pose") >= 0 && wid.indexOf("ref") < 0) ? "" : "none";
+  $("pose").parentNode.style.display = (caps.pose && !caps.image) ? "" : "none";
   applyCnStrength(isRef, state.lastWid !== wid);
   state.lastWid = wid;
 }
@@ -64,8 +72,7 @@ async function reloadState() {
   var st = await api("/state");
   var s = st.data || {};
   var comfy = s.comfy || {};
-  if (comfy.ok === true) setPill("comfy-pill", "ok", T("ui.comfy.pillOk", { version: comfy.version || T("ui.common.online") }));
-  else setPill("comfy-pill", "err", T("ui.comfy.pillDown"));
+  setComfyPill(comfy.ok, comfy.version);
   var def = s.config && s.config.comfy ? s.config.comfy.defaultWorkflowId : "";
   fillWorkflows(s.workflows || [], def);
   loadUi();
@@ -124,10 +131,10 @@ async function pingComfy() {
   var d = res.data || {};
   var status = d.status || {};
   if (status.ok === true) {
-    setPill("comfy-pill", "ok", T("ui.comfy.pillOk", { version: status.version || T("ui.common.online") }));
+    setComfyPill(true, status.version);
     setStatus("comfy-status", T("ui.comfy.onlineLine", { version: status.version || "", n: (d.workflows || []).length }), false);
   } else {
-    setPill("comfy-pill", "err", T("ui.comfy.pillDown"));
+    setComfyPill(false, "");
     setStatus("comfy-status", T("ui.comfy.downLine", { text: status.message || T("ui.comfy.launchHint") }), true);
   }
 }
@@ -136,7 +143,7 @@ async function launchComfy() {
   var res = await api("/comfy/launch", { method: "POST", body: JSON.stringify({ waitMs: 60000 }) });
   var d = res.data || {};
   if (d.ok === true) {
-    setPill("comfy-pill", "ok", T("ui.comfy.pillOk", { version: (d.status && d.status.version) || T("ui.common.online") }));
+    setComfyPill(true, d.status && d.status.version);
     setStatus("comfy-status", T("ui.comfy.launched", { pid: d.pid || "?" }) + (d.alreadyRunning ? T("ui.comfy.alreadyRunning") : ""), false);
     await reloadState();
   } else {

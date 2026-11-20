@@ -7,6 +7,10 @@
  */
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+
 import { createMcpHandler, PROTOCOL_VERSION, SERVER_INFO } from '../lib/mcp.js'
 
 const quietLogger = { info() {}, warn() {}, error() {} }
@@ -487,4 +491,111 @@ test('客户端只读接口：handler.tools() 给的是快照，不含 run', asy
   assert.equal(handler.serverInfo.name, SERVER_INFO.name)
   assert.equal(typeof handler.handle, 'function')
   assert.ok(handler.handle({ jsonrpc: '2.0', id: 1, method: 'ping' }) instanceof Promise)
+})
+
+test('tag_search：先等标签库 ready 再检索（冷启动不退化成只搜 seed）', async () => {
+  /** @type {any[]} */
+  const calls = []
+  /** @type {(value?: any) => void} */
+  let release = () => {}
+  const gate = new Promise(resolve => {
+    release = resolve
+  })
+  const tags = {
+    async ready() {
+      calls.push('ready:start')
+      await gate
+      calls.push('ready:done')
+      return true
+    },
+    search(query, options) {
+      calls.push({ query, options })
+      return [{ tag: 'hanfu', kind: 'general', zh: '汉服', count: 12 }]
+    },
+    stats: () => ({ total: 1 }),
+  }
+  const { handler } = build({ tags })
+  const pending = rpc(handler, 'tools/call', { name: 'tag_search', arguments: { q: 'hanfu' } })
+  // 就绪门没放行时不许已经检索：说明真的在 await，不是 fire-and-forget
+  await new Promise(resolve => setTimeout(resolve, 10))
+  assert.deepEqual(calls, ['ready:start'])
+  release()
+  const payload = payloadOf(await pending)
+  assert.equal(payload.ok, true)
+  assert.equal(payload.rows.length, 1)
+  assert.equal(calls[0], 'ready:start')
+  assert.equal(calls[1], 'ready:done')
+  assert.equal(/** @type {any} */ (calls[2]).query, 'hanfu')
+})
+
+test('tag_search：ready() 抛错也不影响检索本身', async () => {
+  const tags = {
+    async ready() {
+      throw new Error('索引还没建好')
+    },
+    search: () => [{ tag: 'a' }],
+    stats: () => ({ total: 1 }),
+  }
+  const { handler } = build({ tags })
+  const payload = payloadOf(await rpc(handler, 'tools/call', { name: 'tag_search', arguments: { q: 'a' } }))
+  assert.equal(payload.ok, true)
+  assert.equal(payload.rows.length, 1)
+})
+
+test('comfy_run：接受 timeoutMs，waitFor 抛错时仍交出 submitted.promptId', async () => {
+  const comfy = makeComfy()
+  comfy.waitFor = async (/** @type {string} */ promptId, /** @type {any} */ options) => {
+    comfy.calls.waitFor.push({ promptId, options })
+    throw new Error('轮询窗口关了')
+  }
+  const { handler } = build({ comfy })
+  const payload = payloadOf(await rpc(handler, 'tools/call', {
+    name: 'comfy_run',
+    arguments: { positive: '1girl, hanfu', wait: true, timeoutMs: 1234 },
+  }))
+  assert.equal(payload.ok, false)
+  assert.equal(payload.error, 'wait-failed')
+  assert.match(String(payload.message), /轮询窗口关了/)
+  assert.equal(payload.submitted.promptId, 'pid-1', '等待失败也得把 promptId 交回去，调用方才能续查')
+  assert.equal(comfy.calls.waitFor[0].options.timeoutMs, 1234)
+  assert.equal(comfy.calls.submit.length, 1, '等待失败不许重复投递')
+})
+
+test('空批量回 -32600；全通知批量回 null', async () => {
+  const { handler } = build()
+  const empty = /** @type {any} */ (await handler.handle([]))
+  assert.equal(empty.jsonrpc, '2.0')
+  assert.equal(empty.id, null)
+  assert.equal(empty.error.code, -32600)
+  assert.equal(empty.result, undefined, '错误响应不许带 result')
+
+  const allNotifications = /** @type {any} */ (await handler.handle([
+    { jsonrpc: '2.0', method: 'notifications/initialized' },
+    { jsonrpc: '2.0', method: 'notifications/cancelled', params: { requestId: 1 } },
+  ]))
+  assert.equal(allNotifications, null, '全通知批量什么都不该回')
+})
+
+test('SERVER_INFO.version 跟根 package.json 一致（不写死）', async () => {
+  const pkgFile = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'package.json')
+  const pkg = JSON.parse(readFileSync(pkgFile, 'utf8'))
+  assert.match(String(pkg.version), /^\d+\.\d+\.\d+/)
+  assert.equal(SERVER_INFO.version, pkg.version)
+  const { handler } = build()
+  assert.equal(handler.serverInfo.version, pkg.version)
+  const init = await rpc(handler, 'initialize', { protocolVersion: PROTOCOL_VERSION })
+  assert.equal(init.result.serverInfo.version, pkg.version)
+})
+
+test('tools/list：inputSchema 补齐 syntax / timeoutMs / kinds 枚举', async () => {
+  const { handler } = build()
+  /** @type {Map<string, any>} */
+  const byName = new Map((await rpc(handler, 'tools/list')).result.tools.map((/** @type {any} */ tool) => [tool.name, tool]))
+  const forgeSchema = byName.get('forge_tags').inputSchema
+  assert.equal(forgeSchema.properties.syntax.type, 'string')
+  const runSchema = byName.get('comfy_run').inputSchema
+  assert.equal(runSchema.properties.timeoutMs.type, 'integer')
+  assert.match(String(runSchema.properties.timeoutMs.description), /wait/)
+  const searchSchema = byName.get('tag_search').inputSchema
+  assert.deepEqual(searchSchema.properties.kinds.items.enum, ['general', 'character', 'copyright', 'artist'])
 })
