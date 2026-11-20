@@ -36,7 +36,8 @@ export function createRuntime(ctx, rawConfig) {
   const config = resolveConfig(rawConfig)
   const log = createLogger()
   const dir = dataDir()
-  const tags = createTagIndex({ dir, logger: log })
+  // dataDirs 来自 settings（tags.dataDirs）；空数组时 createTagIndex 自己按内置顺序探测。
+  const tags = createTagIndex({ dir, logger: log, dataDirs: config.tags.dataDirs })
   const llm = typeof ctx?.get === 'function' ? ctx.get('llm') : undefined
   const forge = createForge({ config, llm, tags, logger: log })
   const comfy = createComfyClient({ config, logger: log })

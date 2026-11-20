@@ -113,6 +113,7 @@ comfy / forge / mcp 三个模块共用这一层；新增一个后端时必须复
 | `tags.maxTags` | `40` | 正向条数上限 |
 | `tags.weightSyntax` | `comfy` | `comfy`(`(tag:1.2)`) / `a1111` / `plain` |
 | `tags.chineseAlias` | `true` | 中文别名参与匹配 |
+| `tags.dataDirs` | `[]` | 真词表目录（Danbooru 的 `*.jsonl`），最多 8 个；空数组 = 走内置探测（`DSH_DANBOORU_DIR` → `~/.dsh-comfyui-workbench/data/danbooru` → 包内快照 …）。探测不到就只有 seed + overlay 1247 条，forge 会把常见词判成「不在库里」 |
 | `tags.qualityTags` | `["masterpiece","best_quality","highres"]` | 自动加在正向串首的质量词；置空数组 = 不加 |
 | `forge.repair` / `forge.postprocess` / `forge.poseHints` / `forge.candidates` | 全 `true` | 三道本地处理与候选注入的开关 |
 | `forge.candidateLimit` | `18` | 注入给模型的词库候选条数 |

@@ -20,6 +20,7 @@ import { createTagIndex, escapeParens, parseTerm, resetTagIndexCache, unescapeTa
 import { addRecord, isOverlayJsonl, overlaySignature } from '../lib/tags/loader.js'
 import { standardsFor } from '../lib/tags/text.js'
 import { runNormalize, summaryToJson, summaryToText } from '../scripts/tags/build-tags.mjs'
+import * as cfgNs from '../lib/config.js'
 
 const silent = { info() {}, warn() {}, error() {} }
 const repoRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
@@ -583,3 +584,12 @@ test('addRecord：names 与 aliases 并存时两者都进 names', () => {
   assert.deepEqual(entry.names, ['zz甲名', 'zz乙别名', 'zz中文名'])
 })
 
+
+test('配置：tags.dataDirs 归一化（去空/去重/截 8），非数组回落空数组', () => {
+  // 用 normalize 而不是 resolveConfig：后者会并进本机 settings.json（那台机器上可能已经填了目录）
+  const { normalize } = cfgNs
+  const many = normalize({ tags: { dataDirs: ['  D:/a  ', 'D:/a', '', 'D:/b', 1, 'D:/c', 'D:/d', 'D:/e', 'D:/f', 'D:/g', 'D:/h', 'D:/i'] } })
+  assert.deepEqual(many.tags.dataDirs, ['D:/a', 'D:/b', 'D:/c', 'D:/d', 'D:/e', 'D:/f', 'D:/g', 'D:/h'])
+  assert.deepEqual(normalize({ tags: { dataDirs: 'nope' } }).tags.dataDirs, [])
+  assert.deepEqual(normalize({}).tags.dataDirs, [], '默认空数组 = 交给内置探测顺序')
+})
