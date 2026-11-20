@@ -51,6 +51,7 @@ HTTP/MCP 的逐条参数与示例不在这里，看 [`API.md`](./API.md)。
 | `deploy.cmd` / `deploy.sh` | 三行转发（`call start.cmd %*` / `exec start.sh "$@"`），只为兼容老入口 |
 | `Dockerfile` / `docker-compose.yml` / `.env.example` | 容器镜像 `dsh-tagger:0.2.0`，端口 `DSH_TAGGER_PORT`，数据卷 `tagger-data`，`healthcheck` 打 `/tagger/api/health` |
 | `data/tags/*.jsonl` | 随包词表补丁（overlay）；用户词表在 `<dataDir>/tags/`，改了热重载 |
+| `data/danbooru/*.jsonl` | 全量词表快照（general / characters / copyrights / artists / groups + `manifest.json`），由 `scripts/tags/import-dict.mjs` 导入；加载器探测顺序里仓库这一条，命中即 99447 条 |
 | `docs/CONTRACT.md` | **本文件**：唯一权威核心契约（目录 / 配置 / 路由 / refine / forge / tags / SPI / 门禁） |
 | `docs/API.md` | 接口手册（HTTP 路由表 + MCP 工具 + 示例） |
 | `docs/LAYOUT.md` | 目录与分工速览（运行时 / 入口 / 工具 / 测试与文档）+ 三条硬规矩 |
@@ -113,7 +114,7 @@ comfy / forge / mcp 三个模块共用这一层；新增一个后端时必须复
 | `tags.maxTags` | `40` | 正向条数上限 |
 | `tags.weightSyntax` | `comfy` | `comfy`(`(tag:1.2)`) / `a1111` / `plain` |
 | `tags.chineseAlias` | `true` | 中文别名参与匹配 |
-| `tags.dataDirs` | `[]` | 真词表目录（Danbooru 的 `*.jsonl`），最多 8 个；空数组 = 走内置探测（`DSH_DANBOORU_DIR` → `~/.dsh-comfyui-workbench/data/danbooru` → 包内快照 …）。探测不到就只有 seed + overlay 1247 条，forge 会把常见词判成「不在库里」 |
+| `tags.dataDirs` | `[]` | 真词表目录（Danbooru 的 `*.jsonl`），最多 8 个；空数组 = 走内置探测（`DSH_DANBOORU_DIR` → `~/.dsh-comfyui-workbench/data/danbooru` → **仓库的 `data/danbooru`** → …）。仓库那份由 `scripts/tags/import-dict.mjs` 导入；全都探测不到时只剩 seed + overlay 1247 条，forge 会把常见词判成「不在库里」 |
 | `tags.qualityTags` | `["masterpiece","best_quality","highres"]` | 自动加在正向串首的质量词；置空数组 = 不加 |
 | `forge.repair` / `forge.postprocess` / `forge.poseHints` / `forge.candidates` | 全 `true` | 三道本地处理与候选注入的开关 |
 | `forge.candidateLimit` | `18` | 注入给模型的词库候选条数 |
@@ -223,7 +224,7 @@ index.reload() / index.ensureFresh() -> Promise<boolean>   // overlay 改动热�
 `lib/tags.js` 是转发层，实现在 `lib/tags/loader.js`（读 jsonl、overlay 签名、建 Map 索引、单例缓存）与
 `lib/tags/matcher.js`（归一、检索、格式化）。**别直接 import 子模块**，一律从 `lib/tags.js` 走，这样将来换实现不动调用方。
 
-数据源（按顺序探测）：`<workbench>/data/danbooru/*.jsonl` → `<dataDir>/tags/*.jsonl` → `data/tags/*.jsonl`（包内 overlay）
+数据源（按顺序探测）：`DSH_DANBOORU_DIR` → `~/.dsh-comfyui-workbench/data/danbooru/*.jsonl` → **仓库的 `data/danbooru/*.jsonl`** → `<dataDir>/tags/*.jsonl` → `data/tags/*.jsonl`（包内 overlay）
 → 内置 `lib/seed-tags.js` 兜底。
 
 ## 8. SPI 契约（`lib/spi.js`）

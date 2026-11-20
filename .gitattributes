@@ -8,3 +8,6 @@
 *.jpeg binary
 *.webp binary
 *.ico binary
+
+# 全量词表快照（data/danbooru，20MB / 每份几万行）：只在跑 import-dict 时变，别让 diff 和 merge 去碰它。
+data/danbooru/*.jsonl -diff -merge linguist-generated

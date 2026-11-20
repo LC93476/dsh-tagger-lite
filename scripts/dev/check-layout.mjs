@@ -36,6 +36,8 @@ export const ROOT_ALLOW = new Set([
  * client/ 已随 DSH 侧边栏下线；types/ 只服务过宿主客户端声明，已随侧边栏下线。
  */
 export const REQUIRED_DIRS = ['bin', 'lib', 'server', 'data', 'docs', 'scripts', 'tests']
+/** data/danbooru/general.jsonl 的行数下限（只有 seed 时全库才 1247 行，用它区分拿错目录）。 */
+export const DICT_MIN_GENERAL_LINES = 20000
 
 /** 白名单之外唯一收编的条目：与 .gitignore 成对的行尾/编码约定文件。 */
 export const EXTRA_ALLOW = new Set(['.gitattributes'])
@@ -192,6 +194,24 @@ export function checkLayout(opts) {
     }
   }
 
+  // 5.5) data/danbooru 全量词表快照（可选目录）：有就必须是完整的一份
+  const dictDir = path.join(root, "data", "danbooru")
+  if (isDir(dictDir)) {
+    const generalFile = path.join(dictDir, "general.jsonl")
+    if (!isFile(generalFile)) {
+      add("dict-missing", "data/danbooru 缺 general.jsonl（用 scripts/tags/import-dict.mjs 重新导入）")
+    } else {
+      const rows = readFileSync(generalFile, "utf8").split(/\r?\n/).filter(line => line.trim() !== "").length
+      stats.dictionary = { files: listJsonl(dictDir).length, generalRows: rows }
+      if (rows < DICT_MIN_GENERAL_LINES) {
+        add("dict-thin", "data/danbooru/general.jsonl 只有 " + rows + " 行（下限 " + DICT_MIN_GENERAL_LINES + "），像是把 seed 词表拷进去了")
+      }
+    }
+    if (!isFile(path.join(dictDir, "manifest.json"))) {
+      warnings.push("data/danbooru 缺 manifest.json，建议用 scripts/tags/import-dict.mjs 重新导入")
+    }
+  }
+
   // 6) tools/ 必须不存在
   if (existsSync(path.join(root, "tools"))) {
     add("tools-exists", "tools/ 目录必须不存在（结构优化后已并入 scripts/）")
@@ -207,7 +227,10 @@ export function render(result, opts) {
   if (!quiet) for (const w of result.warnings) lines.push("提示：" + w)
   for (const v of result.violations) lines.push(v.message)
   const t = result.stats.tags
-  const tail = "结构统计：data/tags " + t.files + " 份 / " + t.rows + " 行 / " + t.tags + " 个 tag"
+  let tail = "结构统计：data/tags " + t.files + " 份 / " + t.rows + " 行 / " + t.tags + " 个 tag"
+  if (result.stats.dictionary) {
+    tail += "；全量词表快照 " + result.stats.dictionary.files + " 份 / general " + result.stats.dictionary.generalRows + " 行"
+  }
   if (result.ok) {
     lines.push("目录结构体检通过（" + tail.replace("结构统计：", "") + "）")
   } else {

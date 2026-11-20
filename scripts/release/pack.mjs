@@ -214,10 +214,19 @@ export function makeDist(options = {}) {
   }
   // 全量词表快照：解开包后 <包>/data/danbooru/*.jsonl 会被加载器当主数据源（见 lib/tags/loader.js 的探测顺序），
   // 少了它也能跑，只是只剩包内 198 行补词，锻造会丢大量常见词。
+  // 词表快照现在也在仓库里（data/danbooru），listPortableFiles 已经把它拷进去了；
+  // 那时这里只需要记清单，别再拷第二遍（重复写同一路径既慢又会让 MANIFEST 数字翻倍）。
+  const copied = new Set(files)
   let dictionaryFiles = 0
   if (dictionary && Array.isArray(dictionary.files) && dictionary.files.length > 0) {
     for (const file of dictionary.files) {
       const base = path.basename(file)
+      if (copied.has("data/danbooru/" + base)) {
+        const data = readFileSync(path.join(root, "data", "danbooru", base))
+        dictionaryFiles += 1
+        manifest.push("data/danbooru/" + base + "  " + createHash("sha256").update(data).digest("hex").slice(0, 16) + "  " + data.length)
+        continue
+      }
       const to = path.join(dir, "data", "danbooru", base)
       mkdirSync(path.dirname(to), { recursive: true })
       cpSync(file, to)
