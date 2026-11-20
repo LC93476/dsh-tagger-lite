@@ -12,7 +12,7 @@
 | GET/POST | `/config` | GET 读配置视图（同样是裸对象，不含 `ok`）；POST `{ patch }` 写持久化覆盖并热应用 → `{ ok: true, config }` |
 | GET/POST | `/purge` | GET 读破甲档位与系统提示词预览；POST `{ purge: { enabled, level, extraDirectives } }` |
 | GET | `/models?provider=` | 该 provider 可用模型列表 |
-| POST | `/probe` | LLM 连通性探针，返回逐 chunk 摘要（`{ ok, args, chunks }`） |
+| POST | `/probe` | LLM 连通性探针，返回逐 chunk 摘要（`{ ok, args, chunks, capped }`）；整条流 30s 上限、最多收 256 条 chunk，超了置 `capped: true` 提前收尾 |
 | GET | `/spi` | SPI 注册表快照 `{ ok, spi: { version, slots: { 槽位: [{ id, label }] }, hooks: { 钩子: [id] }, backends } }` —— `slots` / `hooks` 是**对象**（按槽位名分组），不是数组 |
 | GET | `/locale?lang=zh` | 语言包：`{ ok: true, locale, langs: ['zh','en'], dict }`；`?lang=en` 取英文，非法值退回 `zh`；读不到包回 500 + `{ ok: false, error: 'no-locale', message }` |
 | POST | `/forge` | 白话 → 标签：body `{ text, options }` |
@@ -28,7 +28,7 @@
 | GET | `/tags?q=&limit=` | 标签检索 `{ rows, stats }` |
 | POST | `/tags/canonicalize` | body `{ tags: string[] }` → 归一结果（含权重与中文） |
 | GET | `/comfy` | ComfyUI 探活 + 启动参数 + 模板摘要 |
-| POST | `/comfy/launch` | 拉起 ComfyUI（已在跑则直接认账），body `{ waitMs }` |
+| POST | `/comfy/launch` | 拉起 ComfyUI（已在跑则直接认账），body `{ waitMs }`；并发点多次只 spawn 一次，后续请求复用同一份等待结果 |
 | POST/GET | `/mcp` | MCP JSON-RPC 端点（GET 用于 SSE/探测） |
 
 **静态资源（不属于 `/tagger/api`，只有独立服务 `server/standalone.mjs` 提供）**：
@@ -109,6 +109,8 @@ CLI `--base-url` / `--api-key` 或环境变量优先于 settings.json。
 { "ok": true, "endpoint": "https://api.example.com/v1/models", "ms": 210, "count": 41, "models": ["..."], "message": "连上了，可见 41 个模型" }
 // 400 no-base-url / no-api-key；502 unreachable 或 http-<status>（带 message）
 ```
+
+`apiKey` 留空只在**同源**时回落已保存的 key：`baseUrl` 的 origin 与配置里 `llm.baseUrl` 不一致（换成了别的服务商）且没填 key，直接回 400 `no-api-key` —— 已保存的密钥不会被发往陌生主机。`baseUrl` 也留空时视同同源，行为和以前一样。
 
 ### 本地后处理开关（`config.forge`）
 
@@ -197,6 +199,9 @@ curl -s -X POST http://127.0.0.1:7789/tagger/api/workflows/import \
 | `schema.vars` 不是数组 | 400 | `bad-schema` |
 | 同名模板已存在且没给 `overwrite` | 409 | `exists` |
 | 模板目录读不了 / 写不了 | 400 | `no-workflow-dir` / `write-failed` |
+| `path` 后缀不是 `.json` | 400 | `bad-path` |
+| `path` 不存在 / 不是普通文件 | 400 | `no-file` |
+| `path` 超过 10MB | 400 | `too-large` |
 ### 参考图类模板：`feiyue-sam3-ref`
 
 > Web 面板里，「出图」区与「参考图」行是常显的；工作流下拉中带 `〔参考图〕` 徽标的模板才吃 `vars.image`，选到别的模板时该行置灰并提示切换。

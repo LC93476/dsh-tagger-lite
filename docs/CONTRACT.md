@@ -159,7 +159,7 @@ const result = await refiner.refine({
 
 四种 `mode` 的语义：
 
-- `add`：补齐缺失标签，不动已有标签与权重；新增上限 `config.refine.maxNewTags`。
+- `add`：补齐缺失标签，不动已有标签与权重；新增上限 `config.refine.maxNewTags`。模型在 `add` 条目里写了显式权重（`"(smile:1.2)"` 或 `{ tag, weight }`）时保留它，没写才用标签库的权重。
 - `edit`：按指令改画面 —— 删冲突、加新词。
 - `prune`：只删冗余/冲突，不新增。
 - `weights`：只调权重，标签集合不变。
@@ -169,7 +169,9 @@ const result = await refiner.refine({
 1. **不重跑整串**：模型只输出差分 JSON，输出预算与小标签集无关。
 2. **新增必须过标签库**：`tags.canonicalizeMany` 命中不了的丢弃并写进 `warnings`。
 3. `keepOrder: true`（默认）时已有顺序不变，新增追加尾部；`false` 才允许重排。
-4. 失败不抛：`{ ok: false, error, warnings }`，HTTP 对应 502。
+4. 失败不抛：`{ ok: false, error, warnings }`，HTTP 对应 502。模型流被中断时 `error` 是 `aborted`（超时是 `timeout`、接口报错是 `llm-error`），不再统一折成 `llm-error`。
+5. **带权重写法能对上原串**：`remove` / `weights` / `order` 里回传 `"(smile:1.2)"`、`"smile::1.3"`、`"{{smile}}"` 都按 `smile` 匹配；同一个词既在 `remove` 又在 `weights` 里时以删除为准，不会出现在 `delta.weighted`。
+6. `beforeRefine` 钩子改 `negative` 会同时影响提示词与返回的 `negative`（以前只改了入参、结果里还是原值）。
 
 ## 6. 锻造契约（`lib/forge.js`）
 

@@ -593,3 +593,160 @@ test('POST /workflows/import：导入 API 格式工作流后立刻出现在 /wor
   })
 })
 
+test('POST /llm/probe：跨源且没填 key 一律 400，同源才借用已保存的 key', async () => {
+  await withServer({}, async ({ base, rt }) => {
+    // 直接定配置：别的用例可能已经往 settings.json 里写过东西，走 rawConfig 会被覆盖
+    rt.config.llm.baseUrl = 'http://127.0.0.1:9/v1'
+    rt.config.llm.apiKey = 'sk-saved'
+    const probe = body => getJson(base + '/llm/probe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    // 换了源（端口不同就是不同源）：配置里存着 key 也不许顺手带上，否则等于把 key 送出去
+    const cross = await probe({ baseUrl: 'http://127.0.0.1:10/v1', apiKey: '' })
+    assert.equal(cross.status, 400)
+    assert.equal(cross.body.error, 'no-api-key')
+    assert.equal(cross.body.endpoint, 'http://127.0.0.1:10/v1/models')
+
+    // 显式给 key：跨源也照打（用户自己填的，不是借用）
+    const crossWithKey = await probe({ baseUrl: 'http://127.0.0.1:10/v1', apiKey: 'sk-typed' })
+    assert.equal(crossWithKey.status, 502)
+    assert.equal(crossWithKey.body.error, 'unreachable')
+
+    // 同源（就是配置里那个地址）：允许回落到已保存的 key，于是走到「连不上」而不是「没 key」
+    const same = await probe({ baseUrl: 'http://127.0.0.1:9/v1' })
+    assert.equal(same.status, 502)
+    assert.equal(same.body.error, 'unreachable')
+  })
+})
+
+test('POST /workflows/import：body.path 只认 .json 普通文件且不超过 10MB', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-http-wfpath-'))
+  const txt = path.join(dir, 'notes.txt')
+  fs.writeFileSync(txt, '{}')
+  const folder = path.join(dir, 'folder.json')
+  fs.mkdirSync(folder)
+  const huge = path.join(dir, 'huge.json')
+  fs.writeFileSync(huge, Buffer.alloc(10 * 1024 * 1024 + 1, 0x20))
+  const missing = path.join(dir, 'nope.json')
+
+  await withServer({ comfy: { workflowDir: dir } }, async ({ base }) => {
+    const post = body => getJson(base + '/workflows/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+
+    const bad = await post({ path: txt })
+    assert.equal(bad.status, 400)
+    assert.equal(bad.body.error, 'bad-path')
+
+    const noFile = await post({ path: missing })
+    assert.equal(noFile.status, 400)
+    assert.equal(noFile.body.error, 'no-file')
+
+    // 目录名也叫 .json：后缀过了，但不是普通文件
+    const isDir = await post({ path: folder })
+    assert.equal(isDir.status, 400)
+    assert.equal(isDir.body.error, 'no-file')
+
+    const tooLarge = await post({ path: huge })
+    assert.equal(tooLarge.status, 400)
+    assert.equal(tooLarge.body.error, 'too-large')
+
+    assert.deepEqual(fs.readdirSync(dir).filter(name => name.endsWith('.schema.json')), [], '被拒的路径不该落盘')
+  })
+})
+
+test('POST /comfy/launch：并发两次只拉起一次 rt.launch()', async () => {
+  await withServer({ comfy: { baseUrl: 'http://127.0.0.1:65531' } }, async ({ base, rt }) => {
+    let calls = 0
+    rt.launch = async () => {
+      calls += 1
+      // 拖一下：让第二个请求一定撞在同一份 Promise 上
+      await new Promise(resolve => setTimeout(resolve, 60))
+      return { ok: false, message: 'stub 起不来' }
+    }
+    const post = () => getJson(base + '/comfy/launch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ waitMs: 5000 }),
+    })
+    const [first, second] = await Promise.all([post(), post()])
+    assert.equal(calls, 1, 'rt.launch 只该跑一次')
+    assert.equal(first.status, 500)
+    assert.equal(first.body.error, 'launch-failed')
+    assert.equal(second.status, 500)
+    assert.equal(second.body.error, 'launch-failed')
+  })
+})
+
+test('GET /tags：冷启动先等索引 ready()，再回结果', async () => {
+  await withServer({}, async ({ base, rt }) => {
+    let ready = false
+    rt.tags.ready = async () => {
+      await new Promise(resolve => setTimeout(resolve, 80))
+      ready = true
+    }
+    const hit = await getJson(base + '/tags?q=1girl&limit=5')
+    assert.equal(hit.status, 200)
+    assert.equal(ready, true, '取标签之前必须等索引就绪')
+    assert.ok(Array.isArray(hit.body.rows))
+
+    // limit 越界要钳住，不能把 0 / 巨值漏进查询
+    const clamped = await getJson(base + '/tags?q=1girl&limit=999999')
+    assert.equal(clamped.status, 200)
+    assert.ok(Array.isArray(clamped.body.rows))
+  })
+})
+
+test('POST 缺 body：/forge /upload /run /tags/canonicalize 都不 500', async () => {
+  await withServer({}, async ({ base }) => {
+    const empty = route => getJson(base + route, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '',
+    })
+
+    const forge = await empty('/forge')
+    assert.equal(forge.status, 400)
+    assert.equal(forge.body.error, 'empty-text')
+
+    const upload = await empty('/upload')
+    assert.notEqual(upload.status, 500)
+    assert.equal(upload.body.ok, false)
+
+    const run = await empty('/run')
+    assert.notEqual(run.status, 500)
+    assert.equal(run.body.ok, false)
+
+    const canonical = await empty('/tags/canonicalize')
+    assert.notEqual(canonical.status, 500)
+    assert.ok(Array.isArray(canonical.body.rows))
+
+    // JSON 里塞 null：parseJson 会归一成 {}，照样不该 500
+    const nullBody = route => getJson(base + route, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: 'null',
+    })
+    assert.notEqual((await nullBody('/upload')).status, 500)
+    assert.notEqual((await nullBody('/run')).status, 500)
+  })
+})
+
+test('GET /pose-thumb 与 GET /health：脏 id 回 404，version 跟着根 package.json', async () => {
+  const pkg = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
+  await withServer({}, async ({ base }) => {
+    const thumb = await getJson(base + '/pose-thumb?id=definitely-not-a-pose')
+    assert.equal(thumb.status, 404)
+    assert.equal(thumb.body.error, 'pose-image')
+
+    const health = await getJson(base + '/health')
+    assert.equal(health.status, 200)
+    assert.equal(health.body.version, pkg.version)
+  })
+})
+
+

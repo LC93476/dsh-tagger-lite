@@ -423,3 +423,97 @@ test('删除不存在的标签只记 warning，不中断', async () => {
   assert.deepEqual(result.delta.removed, [])
   assert.ok(result.warnings.some(text => text.includes('not_there 不在现有串里')))
 })
+
+test('remove 回传带权重写法（(smile:1.2)）也能删掉原串里的 (smile:1.2)', async () => {
+  const llm = jsonStream({ add: [], remove: ['(smile:1.2)'], weights: [] })
+  const refiner = makeRefiner({ llm })
+  const result = await refiner.refine({ positive: '(smile:1.2), 1girl', instruction: '去掉微笑', mode: 'prune' })
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(result.delta.removed, ['smile'])
+  assert.equal(result.positive, '1girl')
+})
+
+test('add：模型给条目写了显式权重 (smile:1.2)，不被清洗成 1', async () => {
+  const llm = jsonStream({ add: ['(smile:1.2)'], remove: [], weights: [] })
+  const refiner = makeRefiner({ llm })
+  const result = await refiner.refine({ positive: '1girl', instruction: '加个微笑但别太重' })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.positive, '1girl, (smile:1.2)')
+  assert.deepEqual(result.delta.added, ['smile'])
+  assert.equal(result.tags[1].weight, 1.2)
+})
+
+test('edit：同一个词既 remove 又 weights 时以删除为准，delta.weighted 不被污染', async () => {
+  const llm = jsonStream({ add: [], remove: ['smile'], weights: [{ tag: 'smile', weight: 1.3 }] })
+  const refiner = makeRefiner({ llm })
+  const result = await refiner.refine({ positive: '1girl, smile, long_hair', instruction: '换成冷脸', mode: 'edit' })
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(result.delta.removed, ['smile'])
+  assert.deepEqual(result.delta.weighted, [])
+  assert.equal(result.positive, '1girl, long_hair')
+})
+
+test('keepOrder=false：order 用带权重写法回传也能对上原串', async () => {
+  const llm = jsonStream({ add: [], remove: [], weights: [], order: ['(long_hair:1.2)', '1girl'] })
+  const refiner = makeRefiner({ llm })
+  const result = await refiner.refine({ positive: '1girl, (long_hair:1.2)', instruction: '重新排一下', options: { keepOrder: false } })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.positive, '(long_hair:1.2), 1girl')
+})
+
+test('JSON 容错：正文多个撇号 + 尾逗号的输出仍能解析', async () => {
+  const raw = '{"add":["smile",],"remove":[],"weights":[],"notes":"it\'s not the girl\'s smile, it\'s fine",}'
+  const refiner = makeRefiner({ llm: jsonStream(raw) })
+  const result = await refiner.refine({ positive: '1girl', instruction: '加微笑' })
+
+  assert.equal(result.ok, true, result.message)
+  assert.deepEqual(result.delta.added, ['smile'])
+  assert.ok(result.notes.includes("it's not the girl's smile"))
+})
+
+test('模型流抛原生 AbortError：归到 aborted，不冒成 llm-error', async () => {
+  const llm = {
+    stream() {
+      return (async function* gen() {
+        yield { type: 'text-delta', index: 0, text: '{"add":[' }
+        const error = new Error('aborted')
+        error.name = 'AbortError'
+        throw error
+      })()
+    },
+  }
+  const refiner = makeRefiner({ llm })
+  const result = await refiner.refine({ positive: '1girl', instruction: '补点东西' })
+
+  assert.equal(result.ok, false)
+  assert.equal(result.error, 'aborted')
+})
+
+test('prune 冷启动：先等标签库 ready 再补中文名', async () => {
+  let warm = false
+  const tags = {
+    stats: () => ({ ready: warm }),
+    async ready() {
+      warm = true
+      return true
+    },
+    canonicalizeMany(list) {
+      return list.map(raw => {
+        const key = tagKey(raw)
+        const matched = warm && Object.hasOwn(CN, key)
+        return { raw, tag: key, weight: 1, matched, cn: matched ? CN[key] : '', kind: matched ? 'general' : 'unknown' }
+      })
+    },
+  }
+  const llm = jsonStream({ add: [], remove: ['long_hair'], weights: [] })
+  const refiner = makeRefiner({ llm, tags })
+  const result = await refiner.refine({ positive: '1girl, long_hair', instruction: '去掉长发', mode: 'prune' })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.positive, '1girl')
+  assert.equal(result.tags[0].cn, '一个女孩')
+})
