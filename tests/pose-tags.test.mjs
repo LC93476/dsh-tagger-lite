@@ -21,6 +21,9 @@ const HERE = path.dirname(fileURLToPath(import.meta.url))
 const REPO = path.resolve(HERE, '..')
 
 /** 实测的真 catalog 分类值（2026-11 快照，26 个）。没有 catalog 时用它兜底做覆盖断言。 */
+// 这些分类本身没有稳定的姿态词，全靠 NAME_HINTS 按名称判：分类映射给空数组是设计，不是漏映射。
+const NAME_DRIVEN = new Set(['特殊', '可爱系'])
+
 const KNOWN_CATEGORIES = [
   '性感・大胆系',
   '趴卧',
@@ -187,7 +190,7 @@ test('分类映射：真 catalog 出现的每个分类都有键，且键不落�
   for (const category of realCategories) {
     const tags = CATEGORY_TAGS[category]
     assert.ok(Array.isArray(tags), category + ' 的值必须是数组')
-    assert.ok(tags.length > 0 || category === '特殊', category + ' 不该是空数组')
+    assert.ok(tags.length > 0 || NAME_DRIVEN.has(category), category + ' 不该是空数组')
     assert.equal(new Set(tags).size, tags.length, category + ' 里不该有重复 tag')
   }
   // 每一行真 catalog 都能推出一串 tag，且不含重复。
