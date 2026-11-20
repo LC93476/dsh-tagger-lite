@@ -56,7 +56,8 @@ function syncRefRow() {
     $("ref-status").textContent = T("ui.ref.hintDisabled");
     $("ref-preview").style.display = "none";
   }
-  $("pose").parentNode.style.display = (caps.pose && !caps.image) ? "" : "none";
+  // 只藏「选姿势」按钮本身：#pose 是隐藏的 select，它的 parentNode 就是 #gen-card，整卡藏掉就没法出图了。
+  if ($("pose-btn")) $("pose-btn").style.display = (caps.pose && !caps.image) ? "" : "none";
   applyCnStrength(isRef, state.lastWid !== wid);
   state.lastWid = wid;
 }

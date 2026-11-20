@@ -173,6 +173,23 @@ function openPoseModal() {
   renderPoseGrid();
   setTimeout(function () { $("pose-q").focus() }, 30);
 }
+/* 灯箱：点画廊里的图放大看，Esc / 点遮罩关闭。节点按需创建，panel.html 里不留骨架。 */
+function closeLightbox(box, onKey) {
+  box.remove();
+  document.removeEventListener("keydown", onKey);
+}
+function openLightbox(src, alt) {
+  var box = document.createElement("div");
+  box.className = "lightbox";
+  var big = document.createElement("img");
+  big.src = src;
+  big.alt = alt || "";
+  box.appendChild(big);
+  var onKey = function (e) { if (e.key === "Escape") closeLightbox(box, onKey) };
+  box.addEventListener("click", function () { closeLightbox(box, onKey) });
+  document.addEventListener("keydown", onKey);
+  document.body.appendChild(box);
+}
 /* ── 出图轮询与图片 ─────────────────────────────────────────────────── */
 function renderImages(images) {
   var box = $("images");
@@ -184,6 +201,7 @@ function renderImages(images) {
     el.src = BASE + "/image?filename=" + encodeURIComponent(img.filename) + "&subfolder=" + encodeURIComponent(img.subfolder || "") + "&type=" + encodeURIComponent(img.type || "output");
     var cap = document.createElement("figcaption");
     cap.textContent = img.filename;
+    el.addEventListener("click", function () { openLightbox(el.src, img.filename) });
     fig.appendChild(el);
     fig.appendChild(cap);
     box.appendChild(fig);

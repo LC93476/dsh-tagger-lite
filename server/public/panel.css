@@ -1,99 +1,278 @@
-/* plan: 锻造台面板的全部样式（从 panel.html 的内联 <style> 抽出，零构建、直接 <link> 加载） */
-/* server/public/panel.css — 面板外观。改了刷新浏览器即可，standalone 每次读盘。 */
+/* server/public/panel.css — 面板外观（零构建、纯原生 CSS）。改完刷新浏览器即可，standalone 每次读盘。
+   设计语言：现代 AI 创作工作台 —— 三层表面 + 1px hairline 边框 + 克制的 Studio Indigo 主色。
+   颜色一律收在下方令牌里，组件只引用 var(--…)，不要在组件内写死色值。 */
 :root {
-  color-scheme: light dark;
-  --bg: #f6f7f9; --card: #ffffff; --fg: #1b1d21; --dim: #6b7280; --line: #e3e6ea;
-  --brand: #2563eb; --ok: #1f8f4e; --warn: #b45309; --err: #c02626;
+  color-scheme: light;
+  /* 表面层级：页面底色 → 卡片面 → 控件槽底 → 悬浮态 */
+  --bg: #f4f5f7;
+  --surface-1: #ffffff;
+  --surface-2: #f7f8fa;
+  --surface-hover: #eef1f6;
+  --card: var(--surface-1);
+  --border: #e3e6eb;
+  --border-strong: #d2d8e2;
+  --line: var(--border);
+  --fg: #14161a;
+  --dim: #66707e;
+  --brand: #3b5bdb;
+  --brand-soft: #eef1fd;
+  --brand-ink: #2a41b0;
+  --ring: rgba(59, 91, 219, 0.28);
+  --ok: #16794a;
+  --ok-soft: #e8f6ee;
+  --warn: #9a5b06;
+  --warn-soft: #fdf3e3;
+  --err: #b3261e;
+  --err-soft: #fdecea;
+  --shadow-1: 0 1px 2px rgba(15, 23, 42, 0.05);
+  --shadow-2: 0 18px 44px -18px rgba(15, 23, 42, 0.3);
+  --r-lg: 14px;
+  --r-md: 10px;
+  --r-sm: 8px;
+  --ease: 150ms cubic-bezier(0.2, 0, 0, 1);
   --mono: ui-monospace, SFMono-Regular, "Cascadia Mono", Consolas, monospace;
+  --sans: -apple-system, "Segoe UI Variable", "Segoe UI", "Microsoft YaHei", sans-serif;
 }
 @media (prefers-color-scheme: dark) {
-  :root { --bg: #101215; --card: #181b20; --fg: #e7e9ee; --dim: #9aa3b2; --line: #2a2f37;
-    --brand: #5b8cff; --ok: #43c07a; --warn: #e0a800; --err: #ef5350; }
+  :root {
+    color-scheme: dark;
+    --brand: #7b95f7;
+    --bg: #0b0d12;
+    --surface-1: #13161d;
+    --surface-2: #0e1117;
+    --surface-hover: #1a1f29;
+    --card: var(--surface-1);
+    --border: rgba(255, 255, 255, 0.08);
+    --border-strong: rgba(255, 255, 255, 0.15);
+    --line: var(--border);
+    --fg: #e6e9ef;
+    --dim: #8b95a7;
+    --brand-soft: rgba(123, 149, 247, 0.16);
+    --brand-ink: #aebffb;
+    --ring: rgba(123, 149, 247, 0.38);
+    --ok: #4ec98a;
+    --ok-soft: rgba(78, 201, 138, 0.14);
+    --warn: #e0a800;
+    --warn-soft: rgba(224, 168, 0, 0.14);
+    --err: #ff6b6b;
+    --err-soft: rgba(255, 107, 107, 0.14);
+    --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.5);
+    --shadow-2: 0 24px 56px -20px rgba(0, 0, 0, 0.78);
+  }
 }
 * { box-sizing: border-box }
-body { margin: 0; background: var(--bg); color: var(--fg);
-  font: 14px/1.55 -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif; }
-header { position: sticky; top: 0; z-index: 5; display: flex; gap: 14px; align-items: center;
-  justify-content: space-between; flex-wrap: wrap; padding: 12px 20px;
-  background: color-mix(in srgb, var(--card) 88%, transparent); backdrop-filter: blur(8px);
-  border-bottom: 1px solid var(--line); }
-h1 { font-size: 17px; margin: 0 }
-.sub { color: var(--dim); font-size: 12px }
-.badges { display: flex; gap: 8px; flex-wrap: wrap }
-.pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px;
-  border: 1px solid var(--line); font-size: 12px; background: var(--card); }
-.pill i { width: 7px; height: 7px; border-radius: 50%; background: var(--dim); display: inline-block }
-.pill[data-state="ok"] i { background: var(--ok) }
+html { scrollbar-color: color-mix(in srgb, var(--dim) 40%, transparent) transparent }
+body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--fg);
+  font: 14px/1.55 var(--sans); font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased }
+
+/* ── 顶栏：磨砂吸顶，左右与 main 对齐 ─────────────────────────── */
+header { position: sticky; top: 0; z-index: 5; display: flex; gap: 16px; align-items: center;
+  justify-content: space-between; flex-wrap: wrap;
+  padding: 12px max(24px, calc((100% - 1360px) / 2 + 24px));
+  background: color-mix(in srgb, var(--bg) 80%, transparent);
+  backdrop-filter: blur(12px) saturate(140%); border-bottom: 1px solid var(--border) }
+h1 { display: flex; align-items: center; gap: 9px; font-size: 16px; margin: 0; letter-spacing: -0.01em }
+h1::before { content: ""; width: 16px; height: 16px; flex: none; border-radius: 5px;
+  background: linear-gradient(140deg, var(--brand), color-mix(in srgb, var(--brand) 45%, #8b5cf6));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 0 0 1px color-mix(in srgb, var(--brand) 40%, transparent) }
+.sub { color: var(--dim); font-size: 12px; margin-top: 3px }
+.badges { display: flex; gap: 8px; flex-wrap: wrap; align-items: center }
+.pill { display: inline-flex; align-items: center; gap: 7px; height: 26px; padding: 0 10px;
+  border-radius: 999px; border: 1px solid var(--border); background: var(--surface-2);
+  color: var(--dim); font-size: 12px; white-space: nowrap; transition: all var(--ease) }
+.pill i { width: 7px; height: 7px; border-radius: 50%; background: var(--dim); display: inline-block; flex: none }
+.pill[data-state="ok"] { color: var(--ok); background: var(--ok-soft); border-color: color-mix(in srgb, var(--ok) 32%, var(--border)) }
+.pill[data-state="ok"] i { background: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 20%, transparent) }
+.pill[data-state="warn"] { color: var(--warn); background: var(--warn-soft); border-color: color-mix(in srgb, var(--warn) 30%, var(--border)) }
 .pill[data-state="warn"] i { background: var(--warn) }
+.pill[data-state="err"] { color: var(--err); background: var(--err-soft); border-color: color-mix(in srgb, var(--err) 30%, var(--border)) }
 .pill[data-state="err"] i { background: var(--err) }
+.pill.lamp b { font-weight: 600; color: var(--fg) }
 .pill.lamp[data-level="off"] i { background: #9aa0a6 }
-.pill.lamp[data-level="light"] i { background: #e0a800 }
+.pill.lamp[data-level="light"] i { background: #d9a406 }
 .pill.lamp[data-level="standard"] i { background: #ef7d00 }
-.pill.lamp[data-level="full"] i { background: #e03131; animation: breathe 2.4s ease-in-out infinite }
-.pill.lamp[data-level="max"] i { background: #a855f7; animation: breathe 1.4s ease-in-out infinite }
-.pill.lamp[data-enabled="off"] { opacity: .55 }
+.pill.lamp[data-level="full"] i { background: #e0533f; animation: breathe 2.6s ease-in-out infinite }
+.pill.lamp[data-level="max"] i { background: #a06bf5; animation: breathe 1.6s ease-in-out infinite }
+.pill.lamp[data-enabled="off"] { opacity: 0.55 }
 .pill.lamp[data-enabled="off"] i { animation: none; background: #9aa0a6 }
-@keyframes breathe { 0%,100% { opacity: 1 } 50% { opacity: .3 } }
-main { max-width: 980px; margin: 0 auto; padding: 18px 20px 60px; display: flex; flex-direction: column; gap: 14px }
-.card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px }
-h2 { font-size: 13px; margin: 0 0 8px; color: var(--dim); font-weight: 600; letter-spacing: .02em }
-.row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 10px }
+@keyframes breathe { 0%, 100% { opacity: 1 } 50% { opacity: 0.34 } }
+
+/* ── 骨架与卡片 ────────────────────────────────────────────── */
+main { max-width: 1000px; margin: 0 auto; padding: 20px 24px 72px; display: flex; flex-direction: column; gap: 16px }
+.col-left, .col-right { display: flex; flex-direction: column; gap: 16px; min-width: 0 }
+.card { background: var(--card); border: 1px solid var(--border); border-radius: var(--r-lg);
+  padding: 16px 18px; box-shadow: var(--shadow-1), inset 0 1px 0 rgba(255, 255, 255, 0.04) }
+h2 { font-size: 12px; margin: 0 0 10px; color: var(--dim); font-weight: 600; letter-spacing: 0.04em }
+.row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 12px }
 .between { justify-content: space-between }
-.grow { flex: 1 1 220px }
+.grow { flex: 1 1 220px; min-width: 0 }
 label { display: inline-flex; gap: 6px; align-items: center; font-size: 12px; color: var(--dim) }
 input, select, textarea, button { font: inherit; color: var(--fg) }
-input[type=number] { width: 86px }
-input, select { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px }
-textarea { width: 100%; background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
-  padding: 10px; resize: vertical; }
-textarea.mono { font-family: var(--mono); font-size: 12.5px; line-height: 1.7 }
-button { border: 1px solid var(--line); background: var(--card); border-radius: 8px; padding: 7px 14px; cursor: pointer }
-button:hover { border-color: var(--brand) }
-button.primary { background: var(--brand); border-color: var(--brand); color: #fff; font-weight: 600 }
-button.ghost { padding: 3px 9px; font-size: 12px }
-button:disabled { opacity: .55; cursor: default }
-.hint { color: var(--dim); font-size: 12px; margin-top: 8px; white-space: pre-wrap }
+
+/* ── 控件：统一 32px 高度、焦点光环、微交互 ───────────────────── */
+input, select { height: 32px; padding: 0 9px; background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: var(--r-sm); transition: border-color var(--ease), box-shadow var(--ease), background var(--ease) }
+input:hover, select:hover, textarea:hover { border-color: var(--border-strong) }
+input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-visible {
+  outline: none; border-color: color-mix(in srgb, var(--brand) 55%, var(--border)); box-shadow: 0 0 0 3px var(--ring) }
+input[type=number] { width: 88px; font-family: var(--mono); font-size: 12.5px }
+input[type=checkbox] { width: 14px; height: 14px; padding: 0; accent-color: var(--brand); flex: none }
+input[type=file] { height: auto; padding: 5px 8px; font-size: 12px; color: var(--dim) }
+select { padding-right: 6px; cursor: pointer }
+textarea { width: 100%; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-md);
+  padding: 10px 12px; resize: vertical; line-height: 1.6;
+  transition: border-color var(--ease), box-shadow var(--ease) }
+textarea.mono { font-family: var(--mono); font-size: 12.5px; line-height: 1.7; letter-spacing: -0.01em }
+button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 32px;
+  padding: 0 13px; border: 1px solid var(--border); border-radius: var(--r-sm); background: var(--surface-1);
+  font-size: 13px; cursor: pointer; transition: background var(--ease), border-color var(--ease), color var(--ease), transform var(--ease), filter var(--ease) }
+button:hover { border-color: var(--border-strong); background: var(--surface-hover) }
+button:active { transform: translateY(1px) }
+button.primary { color: #fff; font-weight: 600;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--brand) 86%, #ffffff), var(--brand));
+  border-color: color-mix(in srgb, var(--brand) 78%, #000000);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.24), 0 1px 2px color-mix(in srgb, var(--brand) 28%, transparent) }
+button.primary:hover { filter: brightness(1.07); border-color: color-mix(in srgb, var(--brand) 86%, #000000) }
+button.ghost { height: 26px; padding: 0 10px; font-size: 12px; background: transparent; color: var(--dim) }
+button.ghost:hover { color: var(--fg) }
+button:disabled { opacity: 0.6; cursor: default; transform: none }
+button.primary:disabled { animation: working 1.6s ease-in-out infinite }
+@keyframes working { 0%, 100% { opacity: 0.6 } 50% { opacity: 0.95 } }
+.hint { color: var(--dim); font-size: 12px; margin-top: 8px; white-space: pre-wrap; line-height: 1.6 }
 .err { color: var(--err) }
-.chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px }
+
+/* ── 标签芯片 ──────────────────────────────────────────────── */
+.chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px }
 .chip { display: inline-flex; gap: 6px; align-items: center; font-family: var(--mono); font-size: 12px;
-  border: 1px solid var(--line); border-radius: 999px; padding: 2px 4px 2px 9px; cursor: pointer }
+  border: 1px solid var(--border); border-radius: 7px; padding: 3px 5px 3px 9px; cursor: pointer;
+  background: var(--surface-2); transition: all var(--ease) }
+.chip:hover { background: var(--surface-hover); border-color: var(--border-strong) }
 .chip b { font-weight: 500 }
-.chip em { color: var(--dim); font-style: normal; font-family: inherit }
-.chip span { color: var(--dim); padding: 0 4px }
-.delta { margin-top: 10px; font-family: var(--mono); font-size: 12px; white-space: pre-wrap }
-.images { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); margin-top: 12px }
-.images figure { margin: 0 }
-.images img { width: 100%; border-radius: 10px; border: 1px solid var(--line); display: block }
-.images figcaption { font-size: 11px; color: var(--dim); font-family: var(--mono); margin-top: 4px; word-break: break-all }
-.empty { color: var(--dim); font-size: 12px }
-.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; margin-top: 8px }
-.grid2 label { display: flex; flex-direction: column; align-items: stretch; gap: 4px }
+.chip em { color: var(--dim); font-style: normal; font-family: var(--sans); font-size: 11px }
+.chip span { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px;
+  border-radius: 5px; color: var(--dim); transition: all var(--ease) }
+.chip span:hover { background: var(--err-soft); color: var(--err) }
+.delta { margin-top: 10px; font-family: var(--mono); font-size: 12px; white-space: pre-wrap; color: var(--dim) }
+
+/* ── 折叠设置面板：纯 CSS chevron 替换原生三角 ─────────────────── */
+details.card > summary { list-style: none; display: flex; align-items: center; gap: 9px; cursor: pointer;
+  font-size: 13px; color: var(--dim); font-weight: 600; letter-spacing: 0.02em; transition: color var(--ease) }
+details.card > summary::-webkit-details-marker { display: none }
+details.card > summary:hover { color: var(--fg) }
+details.card > summary::before { content: ""; width: 6px; height: 6px; margin-top: -3px; flex: none;
+  border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg); transition: transform var(--ease) }
+details[open].card > summary::before { transform: rotate(45deg); margin-top: -1px }
+hr.sep { border: 0; border-top: 1px solid var(--border); margin: 16px 0 4px }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; margin-top: 10px }
+.grid2 label { display: flex; flex-direction: column; align-items: stretch; gap: 5px }
 .grid2 label > input { width: 100% }
 .grid2 .wide { grid-column: 1 / -1 }
-@media (max-width: 720px) { .grid2 { grid-template-columns: 1fr } }
-details.card > summary { cursor: pointer; font-size: 13px; color: var(--dim); font-weight: 600; letter-spacing: .02em }
-hr.sep { border: 0; border-top: 1px solid var(--line); margin: 14px 0 6px }
-.pose-card { display: flex; align-items: center; gap: 10px; width: 100%; background: var(--bg); border: 1px solid var(--line);
-  border-radius: 10px; padding: 6px 10px 6px 6px; cursor: pointer; color: inherit; font: inherit; text-align: left }
+
+/* ── 白话输入：药丸开关 + 右侧主按钮 ─────────────────────────── */
+label:has(> input#fg-repair), label:has(> input#fg-postprocess),
+label:has(> input#fg-posehints), label:has(> input#fg-candidates) {
+  padding: 4px 11px 4px 9px; border: 1px solid var(--border); border-radius: 999px;
+  background: var(--surface-2); cursor: pointer; user-select: none; transition: all var(--ease) }
+label:has(> input#fg-repair):hover, label:has(> input#fg-postprocess):hover,
+label:has(> input#fg-posehints):hover, label:has(> input#fg-candidates):hover {
+  background: var(--surface-hover); border-color: var(--border-strong) }
+label:has(> input#fg-repair):has(input:checked), label:has(> input#fg-postprocess):has(input:checked),
+label:has(> input#fg-posehints):has(input:checked), label:has(> input#fg-candidates):has(input:checked) {
+  color: var(--fg); background: var(--brand-soft);
+  border-color: color-mix(in srgb, var(--brand) 42%, var(--border)) }
+#forge { margin-left: auto; min-width: 118px; height: 36px }
+
+/* ── 出图卡：紧凑对齐的参数矩阵 ─────────────────────────────── */
+#gen-card > .row:has(#width) { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 12px; align-items: end; margin-top: 14px }
+#gen-card > .row:has(#width) label { display: flex; flex-direction: column; align-items: stretch; gap: 4px }
+#gen-card > .row:has(#width) label > input { width: 100% }
+#gen-card > .row:has(#width) > #run { grid-column: 1 / -1; height: 36px; margin-top: 2px }
+#gen-card > .row:has(#cnstrength) { align-items: flex-end }
+#gen-card > .row:has(#cnstrength) label { flex-direction: column; align-items: stretch; gap: 4px; flex: none }
+#gen-card > .row:has(#cnstrength) input { width: 100% }
+#ref-row { align-items: flex-start }
+#ref-row label { flex-direction: column; align-items: stretch; gap: 5px }
+#ref-row label > input { width: 100% }
+#ref-preview { object-fit: cover; border-radius: var(--r-sm) !important; border-color: var(--border) !important; max-height: 72px }
+.pose-card { display: flex; align-items: center; gap: 10px; width: 100%; background: var(--surface-2);
+  border: 1px solid var(--border); border-radius: var(--r-md); padding: 6px 10px 6px 6px; cursor: pointer;
+  color: inherit; font: inherit; text-align: left; height: auto; transition: all var(--ease) }
 .pose-card:hover { border-color: var(--brand) }
-.pose-card img { width: 44px; height: 58px; object-fit: cover; border-radius: 6px; background: #111; display: block }
+.pose-card:hover .pt b { color: var(--brand-ink) }
+.pose-card img { width: 44px; height: 58px; object-fit: cover; border-radius: 6px; background: #111; display: block; flex: none }
+.pose-card img[hidden] { display: none }
+input[type=file] { padding: 5px 6px; font-size: 12px; color: var(--dim) }
+input[type=file]::file-selector-button { margin-right: 10px; padding: 5px 12px; border-radius: var(--r-sm);
+  border: 1px solid var(--border-strong); background: var(--surface-1); color: var(--fg); font: inherit;
+  font-size: 12px; cursor: pointer; transition: background var(--ease), border-color var(--ease) }
+input[type=file]::file-selector-button:hover { background: var(--surface-hover); border-color: var(--brand) }
 .pose-card .pt { display: flex; flex-direction: column; gap: 2px; min-width: 0 }
-.pose-card b { font-weight: 500; font-size: 13px }
+.pose-card b { font-weight: 500; font-size: 13px; transition: color var(--ease) }
 .pose-card .pt span { font-size: 11px; color: var(--dim); font-family: var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
-.modal { position: fixed; inset: 0; background: rgba(0, 0, 0, .62); display: flex; align-items: center; justify-content: center; z-index: 50; padding: 24px }
+
+/* ── 成品画廊与灯箱 ────────────────────────────────────────── */
+.images { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); margin-top: 14px }
+.images figure { margin: 0; border-radius: var(--r-md); overflow: hidden; background: var(--surface-2);
+  border: 1px solid var(--border); transition: border-color var(--ease), box-shadow var(--ease) }
+.images figure:hover { border-color: var(--border-strong); box-shadow: var(--shadow-1) }
+.images img { width: 100%; display: block; cursor: zoom-in; transition: transform 220ms var(--ease) }
+.images figure:hover img { transform: scale(1.015) }
+.images figcaption { font-size: 11px; color: var(--dim); font-family: var(--mono); margin: 0; padding: 5px 8px;
+  border-top: 1px solid var(--border); word-break: break-all }
+.empty { color: var(--dim); font-size: 12px }
+.lightbox { position: fixed; inset: 0; z-index: 80; display: flex; align-items: center; justify-content: center;
+  padding: 36px; background: rgba(6, 8, 12, 0.88); backdrop-filter: blur(4px); cursor: zoom-out;
+  animation: fade-in 160ms var(--ease) }
+.lightbox img { max-width: 100%; max-height: 100%; border-radius: var(--r-md);
+  box-shadow: 0 30px 80px -24px rgba(0, 0, 0, 0.85); border: 1px solid rgba(255, 255, 255, 0.12) }
+@keyframes fade-in { from { opacity: 0 } to { opacity: 1 } }
+
+/* ── 姿势选择弹窗 ──────────────────────────────────────────── */
+.modal { position: fixed; inset: 0; background: rgba(6, 8, 12, 0.66); display: flex; align-items: center;
+  justify-content: center; z-index: 50; padding: 24px; backdrop-filter: blur(6px);
+  animation: fade-in 160ms var(--ease) }
 .modal[hidden] { display: none }
-.modal-box { width: min(1100px, 100%); max-height: 88vh; display: flex; flex-direction: column; gap: 10px;
-  background: var(--bg); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px }
+.modal-box { width: min(1100px, 100%); max-height: 88vh; display: flex; flex-direction: column; gap: 12px;
+  background: var(--surface-1); border: 1px solid var(--border-strong); border-radius: var(--r-lg);
+  padding: 16px 18px; box-shadow: var(--shadow-2) }
 .modal-head { display: flex; gap: 10px; align-items: center }
 .modal-head b { font-size: 14px; font-weight: 600; white-space: nowrap }
 .modal-grid { overflow: auto; display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
-  grid-auto-rows: min-content; align-items: start; padding-right: 4px }
-.modal-grid figure { margin: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; cursor: pointer; background: var(--card, #1a1a1a) }
-.modal-grid figure:hover { border-color: var(--brand) }
-.modal-grid figure.on { border-color: var(--brand); box-shadow: 0 0 0 1px var(--brand) inset }
+  grid-auto-rows: min-content; align-items: start; padding-right: 4px; scrollbar-width: thin }
+.modal-grid figure { margin: 0; border: 1px solid var(--border); border-radius: var(--r-md); overflow: hidden;
+  cursor: pointer; background: var(--surface-2); transition: border-color var(--ease), transform var(--ease) }
+.modal-grid figure:hover { border-color: var(--brand); transform: translateY(-1px) }
+.modal-grid figure.on { border-color: var(--brand);
+  box-shadow: 0 0 0 1px var(--brand) inset, 0 6px 18px -8px color-mix(in srgb, var(--brand) 55%, transparent) }
 .modal-grid img { width: 100%; height: 176px; object-fit: cover; object-position: top center; display: block; background: #fff }
-.modal-grid figcaption { padding: 4px 6px; font-size: 11px; line-height: 1.35 }
-.modal-grid figcaption em { display: block; color: var(--dim); font-style: normal; font-family: var(--mono); font-size: 10px }
+.modal-grid figcaption { padding: 5px 7px; font-size: 11px; line-height: 1.35;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden }
+.modal-grid figcaption em { display: block; color: var(--dim); font-style: normal; font-family: var(--mono);
+  font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
 .sets { display: flex; gap: 6px; flex-wrap: wrap }
-.sets button { font-size: 12px; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line); background: transparent; color: inherit; cursor: pointer }
+.sets button { height: 26px; font-size: 12px; padding: 0 11px; border-radius: 999px;
+  border: 1px solid var(--border); background: transparent; color: var(--dim); cursor: pointer }
+.sets button:hover { color: var(--fg); border-color: var(--border-strong) }
 .sets button.on { background: var(--brand); border-color: var(--brand); color: #fff }
+
+/* ── 滚动条与窄屏回落 ──────────────────────────────────────── */
+::-webkit-scrollbar { width: 10px; height: 10px }
+::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--dim) 35%, transparent); border-radius: 999px;
+  border: 2px solid transparent; background-clip: content-box }
+::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--dim) 55%, transparent); background-clip: content-box }
+::-webkit-scrollbar-track { background: transparent }
+@media (max-width: 720px) { .grid2 { grid-template-columns: 1fr } }
+
+/* 大屏双栏工作台：左 提示词锻造 + 结果 + 精修，右 出图与画廊。DOM 顺序不变，纯靠网格定位。 */
+@media (min-width: 1120px) {
+  main { max-width: 1360px; padding: 22px 24px 80px; gap: 18px;
+    display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr); align-items: start }
+  .col-left, .col-right { gap: 18px }
+  #settings-card { grid-column: 1 / -1 }
+  .col-left { grid-column: 1 }
+  .col-right { grid-column: 2 }
+  #gen-card { position: sticky; top: 76px }
+  #gen-card > .row:has(#width) { grid-template-columns: 1fr 1fr; gap: 10px }
+}
