@@ -22,7 +22,7 @@ import { fileURLToPath } from 'node:url'
 
 import { createRuntime, createHandlers } from '../index.js'
 import { LEGACY_PREFIX, PREFIX, createDispatch } from '../lib/routes.js'
-import { createContext, createLlmShim, createToolsShim, createWebServerShim } from './shims.mjs'
+import { createContext, createLlmShim, createWebServerShim } from './shims.mjs'
 
 const DEFAULT_PORT = 7789
 const DEFAULT_HOST = '127.0.0.1'
@@ -156,8 +156,7 @@ const llm = createLlmShim({
   },
 })
 const webServer = createWebServerShim({ host, port, logger })
-const tools = createToolsShim()
-const ctx = createContext({ llm, webServer, tools })
+const ctx = createContext({ llm, webServer })
 
 // 只把「独立运行时确实变了的」那些配置传进去；其余交给 lib/config.js 的默认值与 settings.json。
 const rawConfig = {
@@ -170,7 +169,7 @@ const rawConfig = {
 
 runtime = createRuntime(ctx, rawConfig)
 const rt = runtime
-// 宿主插件路径下 ctx 里有 llm，这里换成 shim；mcp 的 refine 需要迟到绑定（createRuntime 没传）。
+// mcp 的 refine 需要迟到绑定（createRuntime 没传）。
 if (rt !== undefined && rt.mcp !== undefined && typeof rt.mcp.attach === 'function') {
   rt.mcp.attach({ refine: rt.refine })
 }

@@ -20,7 +20,7 @@ const ACCEPT_DIRS = [".dockerignore", ".gitignore", ".github", "package.json", "
 function makeRepo(options) {
   const opts = options || {}
   const dir = mkdtempSync(path.join(os.tmpdir(), "ptf-layout-"))
-  for (const name of ["bin", "lib", "client", "server", "data", "docs", "scripts", "tests", "types"]) {
+  for (const name of ["bin", "lib", "server", "data", "docs", "scripts", "tests"]) {
     mkdirSync(path.join(dir, name), { recursive: true })
   }
   mkdirSync(path.join(dir, "data", "tags"), { recursive: true })

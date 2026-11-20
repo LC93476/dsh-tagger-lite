@@ -29,7 +29,7 @@ npm run check     # check:tags → check:overlay → check:layout → typecheck 
 
 ## 目录怎么分
 
-见 [`docs/LAYOUT.md`](docs/LAYOUT.md)：`lib/` 是业务逻辑，`server/` 是 HTTP 与独立服务，`client/` 是 DSH 侧边栏面板，`scripts/` 是开发期工具（按 `dev/` `tags/` `release/` `assets/` `win/` 分组），`data/` 是词表。
+见 [`docs/LAYOUT.md`](docs/LAYOUT.md)：`lib/` 是业务逻辑，`server/` 是 HTTP、独立服务入口与 web 面板静态资源，`scripts/` 是开发期工具（按 `dev/` `tags/` `release/` `assets/` `win/` 分组），`data/` 是词表。
 
 ## 分支与提交信息
 

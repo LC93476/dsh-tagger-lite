@@ -2,7 +2,7 @@
 
 > 白话描述 → WD（Danbooru）标准标签 → 投递 ComfyUI。省掉「再找一个 LLM 把话转成 tag」那一跳。
 
-面板挂在 DSH 左侧栏，也能单独起 web 服务。锻造走宿主的 llm 服务，出 tag 之后叠三道本地后处理（规范对齐 / 修复未知词 / 中文意图映射），同一段白话反复锻造结果不飘。
+自带一个独立 web 服务，浏览器打开就是锻造台。锻造走 OpenAI 兼容的模型接口，出 tag 之后叠三道本地后处理（规范对齐 / 修复未知词 / 中文意图映射），同一段白话反复锻造结果不飘。
 
 ## 快速开始
 
@@ -19,9 +19,8 @@
 ```
 dsh-tagger/
 ├─ bin/tagger.mjs          命令行入口（dsh-tagger [--port] [--host] [--data-dir] [--open]）
-├─ index.js  client.js     DSH 插件入口与左侧栏面板
-├─ client/                 面板前端（原生 JS，无构建）
-├─ server/                 独立 web 服务
+├─ index.js               装配入口：createRuntime + createHandlers
+├─ server/                 独立 web 服务与 web 面板静态资源
 ├─ lib/                    锻造、后处理、词表索引、ComfyUI 客户端、路由、MCP
 ├─ data/tags/              词表（jsonl）与大词库快照
 ├─ scripts/                setup.mjs 与 dev/ tags/ release/ assets/ win/

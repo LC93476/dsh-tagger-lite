@@ -3,14 +3,13 @@
 /**
  * server/shims.mjs — 独立入口与 DSH 之间的唯一垫片，只管「生命周期」。
  *
- * 为什么只剩这么点：宿主替身（llm / webServer / tools）是传输实现，2.4 起集中到
+ * 为什么只剩这么点：宿主替身（llm / webServer）是传输实现，2.4 起集中到
  * lib/cordis/host.js 维护；服务表装配与配置读写收拢到 lib/spi.js。这里保留稳定门面，
  * server/standalone.mjs 与 tests/shim.test.mjs 的 import 一行都不用改。
  *
  * 搬运对照（旧位置 → 新位置），每段都是整段搬、函数体未改：
  *   llm 替身（SSE 逐行解析 / 非流式兜底 / 端点拼装）  → lib/cordis/host.js: createLlmShim
  *   webServer 替身（前缀路由表 / listen / close）      → lib/cordis/host.js: createWebServerShim
- *   tools 替身（只记账）                              → lib/cordis/host.js: createToolsShim
  *   flattenMessages                                   → lib/cordis/host.js: flattenMessages
  *   baseUrl 归一与端点拼装                            → lib/cordis/adapter.js: normalizeBaseUrl / apiUrl
  *   服务表装配（rt 的 llm/comfy/tags/forge/... 进 ctx） → lib/spi.js: servicesOf / bindServices
@@ -23,7 +22,6 @@ import { createContextAdapter } from '../lib/cordis/adapter.js'
 export {
   chatCompletionsUrl,
   createLlmShim,
-  createToolsShim,
   createWebServerShim,
   flattenMessages,
   modelsUrl,
@@ -34,13 +32,12 @@ export {
  * @typedef {object} ContextServices
  * @property {any} [llm]
  * @property {any} [webServer]
- * @property {any} [tools]
  * @property {Record<string, any>} [extra]
  */
 
 /**
- * 最小 ctx：createRuntime 只要 get()，apply 还会 effect() / disposeAll()。
- * 服务表与「反序卸载」的生命周期语义在插件模式与独立模式下共用一份，实现在 lib/cordis/adapter.js。
+ * 最小 ctx：createRuntime 只要 get()，收尾还要 effect() / disposeAll()。
+ * 服务表与「反序卸载」的生命周期语义在 lib/cordis/adapter.js。
  * @param {ContextServices} [deps]
  */
 export function createContext(deps = {}) {

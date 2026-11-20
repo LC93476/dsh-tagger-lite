@@ -15,7 +15,7 @@
  *   node scripts/release/pack.mjs --no-zip         # 只要目录，不打 zip
  *   node scripts/release/pack.mjs --quiet          # 只报结果
  *
- * 包里有什么：能独立起 web 服务所需的一切（lib/ server/ client/ data/ locale/ types/ 文档与部署脚本），
+ * 包里有什么：能独立起 web 服务所需的一切（lib/ server/ data/ locale/ 文档与部署脚本），
  * 不含 tests/ scripts/（只带 scripts/win）/ public-src/ .git/ —— 那些是开发期的东西，公开版另有一条 make-public 流水线。
  */
 import { createHash } from "node:crypto"
@@ -30,13 +30,12 @@ const HERE = path.dirname(fileURLToPath(import.meta.url))
 export const ROOT = path.resolve(HERE, "..", "..")
 
 /** 整目录收进包里（相对仓库根） */
-export const INCLUDE_DIRS = ["lib", "server", "client", "data", "locale", "types", "scripts/win"]
+export const INCLUDE_DIRS = ["lib", "server", "data", "locale", "scripts/win"]
 
 /** 单文件收进包里（相对仓库根） */
 export const INCLUDE_FILES = [
   "package.json",
   "index.js",
-  "client.js",
   "icon.svg",
   "README.md",
   "INSTALL.md",

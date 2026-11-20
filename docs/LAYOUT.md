@@ -3,19 +3,15 @@
 一份代码只放在一个地方，一类事情只放在一个目录。这份文件是**目录的权威说明**；
 改结构先改这里，再动文件（`docs/CONTRACT.md` §1 是它的明细版，两份对不上以 CONTRACT 为准并回来修）。
 
-## 运行时（宿主加载 + 独立服务共用）
+## 运行时（独立服务）
 
 | 路径 | 是什么 | 谁读它 |
 | --- | --- | --- |
-| `index.js` | DSH 插件入口（`createRuntime` + HTTP 路由表） | DSH 宿主 |
-| `client.js` | 侧边栏面板门面（**classic script**，宿主用 `new Function` 跑，禁顶层 import/export） | DSH 客户端 |
-| `client/` | 面板子模块（纯 ESM，经 `GET /tagger/api/_mod/client/<名字>.js` 下发） | 浏览器 |
+| `index.js` | 装配入口（`createRuntime` + HTTP 路由表） | `server/standalone.mjs` |
 | `lib/` | 运行时库：`tags/` `forge/` `refine/` `postprocess/` `comfy.js` `workflow-import.js` `mcp.js` `spi.js` `routes.js` `config.js` … | index.js / server/ |
-| `server/` | 独立 web 服务：`standalone.mjs`（入口）`shims.mjs`（宿主模拟）`panel.html` + `public/`（面板静态资源） | 浏览器 / 容器 |
+| `server/` | 独立 web 服务：`standalone.mjs`（入口）`shims.mjs`（可选服务垫片）`panel.html` + `public/`（面板静态资源） | 浏览器 / 容器 |
 | `data/tags/` | 随包补词表（四个主文件 + `seed/` 十三份） | `lib/tags/loader.js` |
-| `locale/` | 面板文案 `zh.json` / `en.json`（与 `client/locale.js`、`server/public/i18n.js` 内嵌副本三处同步） | 宿主 / 浏览器 |
-| `types/host.d.ts` | 宿主全局（`__ModuleLoader__` 等）的类型声明，给 `tsc` 用 | 仅构建期 |
-| `icon.svg` `cordis.patch.yml` | 插件图标与宿主补丁 | DSH 宿主 |
+| `locale/` | 面板文案 `zh.json` / `en.json`（`server/public/i18n.js` 经 `GET /tagger/api/locale` 取） | 浏览器 |
 
 ## 入口（用户双击 / 命令行）
 
@@ -43,9 +39,9 @@
 
 | 路径 | 干什么 |
 | --- | --- |
-| `tests/*.test.mjs` | 20 个套件，`node --test --test-concurrency=1 tests/*.test.mjs`；**必须串行**（多套件共用默认词表目录） |
+| `tests/*.test.mjs` | 21 个套件，`node --test --test-concurrency=1 tests/*.test.mjs`；**必须串行**（多套件共用默认词表目录） |
 | `tests/_lib-guard.mjs` | 没装 Danbooru 词表的机器上让「需要真库」的用例 skip 而不是失败 |
-| `docs/CONTRACT.md` | 唯一权威契约：运行时对象 / 配置键 / 路由 / refine / forge / tags / SPI / 客户端 / 门禁 |
+| `docs/CONTRACT.md` | 唯一权威契约：运行时对象 / 配置键 / 路由 / refine / forge / tags / SPI / 门禁 |
 | `docs/API.md` | HTTP 与 MCP 接口手册（含 curl 例子） |
 | `docs/PERF.md` | 性能基准与健壮性清单 |
 | `docs/LAYOUT.md` | 本文件：目录与分工速览 |
@@ -55,5 +51,5 @@
 ## 三条硬规矩
 
 1. **运行时零依赖**：只用 node 标准库，`npm install` 只在开发期装 `typescript` / `@types/node` 跑类型检查。
-2. **外部契约不许改名**：HTTP 路由与响应形状、MCP 工具名与参数、`lib/config.js` 的 `DEFAULTS` 键名、面板 `data-testid` 前缀 `ptf-`、`client/` 子模块名（浏览器经 `/_mod/client/<名字>.js` 取）。
+2. **外部契约不许改名**：HTTP 路由与响应形状、MCP 工具名与参数、`lib/config.js` 的 `DEFAULTS` 键名、面板 `data-testid` 前缀 `ptf-`。
 3. **生成物不入库**：`dist/` `.data/` `.runtime/` `.inject-backups/` `tmp/` `*.msg.txt` `tagger.env.cmd` `settings.json` 都在 `.gitignore` 里。

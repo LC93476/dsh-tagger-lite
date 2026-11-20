@@ -59,7 +59,7 @@ test("一键脚本都有三条路：本机 node / docker / 便携 node", () => {
 
 test("便携包清单：带上跑起来要的一切，不带开发期杂物", () => {
   const files = listPortableFiles(ROOT)
-  for (const must of ["package.json", "index.js", "client.js", "server/standalone.mjs", "lib/forge/index.js", "lib/tags/loader.js", "data/tags/pose-view.jsonl", "server/public/app.js", "client/panel.js", "locale/zh.json", "Dockerfile", "deploy.cmd", "deploy.sh", "INSTALL.md"]) {
+  for (const must of ["package.json", "index.js", "server/standalone.mjs", "lib/forge/index.js", "lib/tags/loader.js", "data/tags/pose-view.jsonl", "server/public/app.js", "locale/zh.json", "Dockerfile", "deploy.cmd", "deploy.sh", "INSTALL.md"]) {
     assert.ok(files.includes(must), "清单里应该有 " + must)
   }
   for (const banned of files.filter(f => f.startsWith("tests/") || f.startsWith("scripts/release/") || f.startsWith("scripts/assets/") || f.startsWith("public-src/") || f.startsWith(".git/"))) {

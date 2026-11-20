@@ -17,8 +17,7 @@ WORKDIR /app
 
 # 这个项目没有任何运行时依赖（只用 node 标准库），所以不需要 npm install，
 # 也就不需要联网装包：镜像构建只做文件拷贝，离线也能构建。
-COPY package.json index.js client.js icon.svg ./
-COPY client ./client
+COPY package.json index.js icon.svg ./
 COPY lib ./lib
 COPY server ./server
 COPY data ./data

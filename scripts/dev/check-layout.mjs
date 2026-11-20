@@ -9,7 +9,7 @@
  *
  * 检查项：
  *   1. 根目录白名单：只留「用户会点、会看、会配置」的条目，多一个就报。
- *   2. 一级运行目录齐备：bin lib client server data docs scripts tests types。
+ *   2. 一级运行目录齐备：bin lib server data docs scripts tests。
  *   3. docs/ 下每个 .md 都要在 docs/README.md 索引里出现（README 本身除外）。
  *      docs/README.md 缺失时这一项降级成提示，不算失败。
  *   4. package.json 里形如「node <path> ...」的 scripts 必须指向真实存在的文件。
@@ -24,15 +24,18 @@ import { pathToFileURL } from 'node:url'
 export const ROOT_ALLOW = new Set([
   '.dockerignore', '.env.example', '.gitignore', '.github', 'Dockerfile',
   'README.md', 'INSTALL.md', 'CONTRIBUTING.md', 'LICENSE', 'package.json', 'tsconfig.json',
-  'cordis.patch.yml', 'docker-compose.yml', 'deploy.cmd', 'deploy.sh',
+  'docker-compose.yml', 'deploy.cmd', 'deploy.sh',
   'start.cmd', 'start.sh', 'start-tagger.cmd', 'stop-tagger.cmd', 'start-tagger-hidden.vbs',
-  'icon.svg', 'index.js', 'client.js',
-  'bin', 'client', 'data', 'docs', 'lib', 'locale', 'public-src', 'scripts', 'server', 'tests', 'types',
+  'icon.svg', 'index.js',
+  'bin', 'data', 'docs', 'lib', 'locale', 'public-src', 'scripts', 'server', 'tests',
   'node_modules', '.git', '.data', '.runtime',
 ])
 
-/** 一级运行目录：少了任何一个都跑不起来（client/ 是桌面端注入的客户端包）。 */
-export const REQUIRED_DIRS = ['bin', 'lib', 'client', 'server', 'data', 'docs', 'scripts', 'tests', 'types']
+/**
+ * 一级运行目录：少了任何一个都跑不起来。
+ * client/ 已随 DSH 侧边栏下线；types/ 只服务过宿主客户端声明，已随侧边栏下线。
+ */
+export const REQUIRED_DIRS = ['bin', 'lib', 'server', 'data', 'docs', 'scripts', 'tests']
 
 /** 白名单之外唯一收编的条目：与 .gitignore 成对的行尾/编码约定文件。 */
 export const EXTRA_ALLOW = new Set(['.gitattributes'])

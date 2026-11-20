@@ -42,7 +42,7 @@
 `/public/*` 的缓存策略：**`no-cache` + 强 ETag**（`"<size 十六进制>-<mtimeMs 十六进制>"`）。
 浏览器可以留副本，但每次刷新都带 `If-None-Match` 复验：没改 → `304` 空 body；改了（size 或 mtime 变）→
 ETag 失效，拿到新内容。既不会每次重下 100KB，也不会被缓存骗着看到旧面板。
-HTML 页面、接口 JSON、`/_mod/*` 子模块仍是 `no-store`。
+HTML 页面与接口 JSON 仍是 `no-store`。
 
 `/public` 只收白名单扩展名（`.css .js .json .svg .png .jpg .jpeg .webp`），带 `..` 或解析后跑到
 `server/public/` 之外的路径一律 `400 {"ok":false,"error":"bad-path"}`（挡路径穿越）。
@@ -58,7 +58,7 @@ HTML 页面、接口 JSON、`/_mod/*` 子模块仍是 `no-store`。
   chars: 6400 }         // 拼进系统提示词的破甲层总字数
 ```
 
-面板拿到不认识的 `level` 一律退回 `full`（`client/state.js` 的 `normalizePurge`）。
+面板拿到不认识的 `level` 一律退回 `full`。
 
 ## `POST /forge`
 
@@ -77,7 +77,7 @@ curl -s http://127.0.0.1:PORT/tagger/api/forge \
   notes: '补了构图与光线',
   ms: 14200, model: 'deepseek-v4.1-flash', purgeLevel: 'full',
   warnings: [],
-  // 三道本地后处理留下的痕迹，面板照这个显示（老客户端没有这一项也能用）
+  // 三道本地后处理留下的痕迹，面板照这个显示（老页面没有这一项也能用）
   pipeline: {
     repairs: [{ from: 'top_down_bottom_up', to: 'top-down-bottom-up', how: 'hyphen' }],
     poseHints: [{ tag: 'all_fours', weight: 1.1, hit: '跪趴' }],
@@ -88,13 +88,13 @@ curl -s http://127.0.0.1:PORT/tagger/api/forge \
 
 ### 模型接口与 ComfyUI 连接（`config.llm` / `config.comfy`）
 
-web 版 / 独立服务没有宿主 llm 服务，接口地址与 key 存在 settings.json 里：
+独立服务没有宿主 llm 服务，接口地址与 key 存在 settings.json 里：
 
 | 键 | 说明 |
 | --- | --- |
 | `llm.baseUrl` | OpenAI 兼容地址，可带 `/v1`（拼 `/chat/completions` 与 `/models`） |
 | `llm.apiKey` | 密钥；**`GET /config` 永不回明文**，只回 `apiKeySet` 与 `apiKeyHint`（尾 4 位） |
-| `llm.model` / `llm.provider` | 模型名与 provider 名（DSH 里由宿主 llm 服务接管） |
+| `llm.model` / `llm.provider` | 模型名与 provider 名 |
 | `comfy.baseUrl` / `comfy.launchDir` / `comfy.pythonPath` / `comfy.workflowDir` / `comfy.defaultWorkflowId` | ComfyUI 连接、启动与模板目录 |
 
 保存后**下一次请求立刻用新值**（standalone 的 llm shim 每次调用现读配置），不用重启；
@@ -198,7 +198,7 @@ curl -s -X POST http://127.0.0.1:7789/tagger/api/workflows/import \
 | 模板目录读不了 / 写不了 | 400 | `no-workflow-dir` / `write-failed` |
 ### 参考图类模板：`feiyue-sam3-ref`
 
-> Web 面板与 DSH 面板里，「出图」区与「参考图」行是常显的；工作流下拉中带 `〔参考图〕` 徽标的模板才吃 `vars.image`，选到别的模板时该行置灰并提示切换。
+> Web 面板里，「出图」区与「参考图」行是常显的；工作流下拉中带 `〔参考图〕` 徽标的模板才吃 `vars.image`，选到别的模板时该行置灰并提示切换。
 
 不用姿势库那种白模，直接把**你自己的一张图**喂进去锁体态：节点 400 `LoadImage` 读 `<ComfyUI>/input/` 里的文件，节点 401 `DepthAnythingV2Preprocessor` 提深度图，节点 62 `ControlNetApplyAdvanced` 用这张深度图约束骨架。所以只有两步 —— 先把图传上去，再把返回的 `name` 填进 `vars.image`。
 
@@ -272,6 +272,6 @@ DSH_TAGGER_API_KEY=sk-xxx DSH_TAGGER_MODEL=deepseek-v4.1-flash \
 npm start -- --port 7789
 ```
 
-`GET /` 返回**锻造台面板**（`server/panel.html`，原生 JS，无需构建；改文件后刷新浏览器即生效）；`GET /about` 是原来的 HTML 壳（健康状态 + 接口清单）。`/tagger/api/*` 与 DSH 内行为一致。
+`GET /` 返回**锻造台面板**（`server/panel.html`，原生 JS，无需构建；改文件后刷新浏览器即生效）；`GET /about` 是原来的 HTML 壳（健康状态 + 接口清单）。`/tagger/api/*` 的行为与接口手册一致。
 
 不想敲命令就直接双击仓库根目录的 `start.cmd`：首次进向导，之后起服务并开浏览器，端口默认 7789（`start.cmd 8090` 换端口）。无窗口启动用根目录 `start-tagger-hidden.vbs`（它只是无窗口跑 `start.cmd`），停服务用 `stop-tagger.cmd [端口]`。

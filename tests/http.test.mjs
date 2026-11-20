@@ -1,5 +1,5 @@
 /**
- * 宿主侧集成测试：真的起一个 http server，走 createDispatch → createHandlers → forge/tags/comfy。
+ * 接口集成测试：真的起一个 http server，走 createDispatch → createHandlers → forge/tags/comfy。
  *
  * 为什么要有这一层：各模块自己的测试都绿，不代表拼起来能跑 —— 路由表、返回信封
  * （{ ok:true, ...json } / raw / 204）、配置热改、破甲覆盖键，这些只在接线处出错。
@@ -436,37 +436,6 @@ test('未知路由 404、方法不对 405、坏 JSON 500 带可读消息', async
   })
 })
 
-test('apply()：挂前缀 + 注册三个模型工具', async () => {
-  // 前一个 /config 用例会把 settings.json 落进 SANDBOX_DIR，先把持久化配置清干净
-  fs.rmSync(path.join(SANDBOX_DIR, 'settings.json'), { force: true })
-  const { apply } = await import('../index.js')
-  const llm = fakeLlm()
-  const ctx = fakeCtx(llm)
-  const rt = apply(ctx, {})
-  // 新前缀 + 旧前缀（/prompt-forge/api）同时注册，老脚本不用改
-  assert.equal(ctx.registrations.prefixes.length, 2)
-  assert.equal(ctx.registrations.prefixes[0].path, PREFIX)
-  assert.equal(ctx.registrations.prefixes[0].kind, 'prefix')
-  assert.equal(typeof ctx.registrations.prefixes[0].handler, 'function')
-  assert.equal(ctx.registrations.prefixes[1].path, LEGACY_PREFIX)
-  const names = ctx.registrations.tools.map(t => t.name)
-  for (const expected of ['prompt_forge', 'prompt_forge_run', 'prompt_forge_status']) {
-    assert.ok(names.includes(expected), '缺工具 ' + expected + '（实际 ' + names.join(',') + '）')
-  }
-  // 工具 spec 形状：parameters 是 JSON Schema，output 有 schema + render
-  const spec = ctx.registrations.tools.find(t => t.name === 'prompt_forge')
-  assert.equal(spec.parameters.type, 'object')
-  assert.ok(spec.parameters.properties.text)
-  assert.equal(typeof spec.output.render, 'function')
-  const rendered = spec.output.render({}, { ok: true })
-  assert.ok(Array.isArray(rendered) && rendered[0].type === 'text')
-  // 工具真能跑（假 llm）
-  const value = await spec.execute({ text: '雨夜街头' })
-  assert.equal(value.ok, true)
-  assert.ok(value.positive.includes('1girl'))
-  assert.equal(rt.config.purge.level, 'full')
-})
-
 
 test('GET /comfy：状态灯要的三样都在（ping / 启动计划 / 工作流清单）', async () => {
   await withServer({}, async ({ base }) => {
@@ -572,33 +541,6 @@ test('POST /llm/probe：地址或 key 缺一个就 400（不偷偷联网），�
   })
 })
 
-test('GET /_mod/*：只吐 client/ 下一层的 js 模块，坏名字 400、缺文件 404', async () => {
-  await withServer({}, async ({ base }) => {
-    // 只认 client/<小写字母数字连字符>.js：大写、带子目录、不在 client/ 下都拒绝
-    const badPaths = ['/_mod/client/Panel.js', '/_mod/panel.js', '/_mod/client/sub/panel.js', '/_mod/client/panel.mjs']
-    for (const badPath of badPaths) {
-      const { status, body } = await getJson(base + badPath)
-      assert.equal(status, 400, badPath + ' 应当 400')
-      assert.equal(body.error, 'bad-module')
-    }
-
-    // 名字合法且文件存在：真能读到 client/ 下的模块（光测 400/404 会漏掉解析路径写错的情况）
-    const okRes = await fetch(base + '/_mod/client/api.js')
-    assert.equal(okRes.status, 200)
-    assert.equal(okRes.headers.get('content-type'), 'text/javascript; charset=utf-8')
-    const okSource = await okRes.text()
-    assert.match(okSource, /export (?:async )?function requestJson/)
-
-    // 名字合法但文件不存在：404 且不吐堆栈
-    const missing = await getJson(base + '/_mod/client/zzz-no-such-module.js')
-    assert.equal(missing.status, 404)
-    assert.equal(missing.body.error, 'no-module')
-
-    // 通配路由不能抢掉精确路由
-    const health = await getJson(base + '/health')
-    assert.equal(health.status, 200)
-  })
-})
 test('POST /workflows/import：导入 API 格式工作流后立刻出现在 /workflows，脏输入 4xx 不落盘', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-http-wf-'))
   const workflow = {

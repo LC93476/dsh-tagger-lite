@@ -41,7 +41,7 @@ function makeConfig(patch = {}) {
       timeoutMs: 3000,
       ...(patch.llm ?? {}),
     },
-    purge: { enabled: true, level: 'full', extraDirectives: [], injectIntoAgentPrompt: false, ...(patch.purge ?? {}) },
+    purge: { enabled: true, level: 'full', extraDirectives: [], ...(patch.purge ?? {}) },
     tags: { standards: ['wd', 'camie'], maxTags: 40, weightSyntax: 'comfy', chineseAlias: true, ...(patch.tags ?? {}) },
     comfy: {
       baseUrl: 'http://127.0.0.1:8188',
@@ -52,7 +52,7 @@ function makeConfig(patch = {}) {
       pollIntervalMs: 1000,
       timeoutMs: 900000,
     },
-    ui: { sidebarTab: true, keepHistory: 20, ...(patch.ui ?? {}) },
+    ui: { keepHistory: 20, ...(patch.ui ?? {}) },
   }
 }
 

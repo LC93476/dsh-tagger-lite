@@ -7,7 +7,6 @@
   "main": "index.js",
   "exports": {
     ".": "./index.js",
-    "./client": "./client.js",
     "./spi": "./lib/spi.js",
     "./server": "./server/standalone.mjs",
     "./locale/*.json": "./locale/*.json",
@@ -19,13 +18,10 @@
   },
   "files": [
     "index.js",
-    "client.js",
-    "client/",
     "lib/",
     "server/",
     "data/",
     "locale/",
-    "types/",
     "icon.svg",
     "bin/",
     "README.md"
@@ -49,17 +45,6 @@
   "devDependencies": {
     "@types/node": "^22.10.2",
     "typescript": "^5.6.3"
-  },
-  "dsh": {
-    "bundle": {
-      "patch": "./cordis.patch.yml"
-    },
-    "client": {
-      "platform": "web",
-      "inject": [
-        "@deepseek-ai/dsh-client-ui-slots"
-      ]
-    }
   },
   "meta": {
     "title": "DSh Tagger",

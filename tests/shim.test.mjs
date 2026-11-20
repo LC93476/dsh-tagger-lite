@@ -127,7 +127,7 @@ test('shims.mjs 门面：只剩生命周期，体量 ≤12KB 且不含传输实�
     assert.equal(source.includes(marker), false, 'shims.mjs 里不该再有传输 / MCP 实现：' + marker)
   }
   // 门面必须把原来那批名字继续导出（standalone.mjs 与这个测试直接用）
-  for (const name of ['createLlmShim', 'createWebServerShim', 'createToolsShim', 'createContext', 'flattenMessages', 'normalizeBaseUrl', 'chatCompletionsUrl', 'modelsUrl']) {
+  for (const name of ['createLlmShim', 'createWebServerShim', 'createContext', 'flattenMessages', 'normalizeBaseUrl', 'chatCompletionsUrl', 'modelsUrl']) {
     assert.equal(source.includes(name), true, 'shims.mjs 丢了导出：' + name)
   }
 })
@@ -146,7 +146,7 @@ test('spi：servicesOf / bindServices 把 runtime 的服务装进 ctx，缺席�
 test('spi：配置读写有统一入口，服务名清单固定', () => {
   assert.equal(typeof readConfig, 'function')
   assert.equal(typeof saveConfig, 'function')
-  assert.deepEqual(SERVICE_KEYS.slice(0, 3), ['llm', 'webServer', 'tools'])
+  assert.deepEqual(SERVICE_KEYS.slice(0, 2), ['llm', 'webServer'])
   assert.ok(SERVICE_KEYS.includes('refine'))
 })
 

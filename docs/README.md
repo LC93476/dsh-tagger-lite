@@ -4,7 +4,7 @@
 
 | 文件 | 一句话 | 谁该读 |
 | --- | --- | --- |
-| [CONTRACT.md](CONTRACT.md) | **唯一权威外部契约**：目录职责、运行时对象、config DEFAULTS 全表、HTTP 路由、refine / forge / tags / SPI / 客户端契约、门禁命令 | 任何要改 `lib/` `server/` `client/` 或对外接口的人，动手前必读 |
+| [CONTRACT.md](CONTRACT.md) | **唯一权威外部契约**：目录职责、运行时对象、config DEFAULTS 全表、HTTP 路由、refine / forge / tags / SPI、门禁命令 | 任何要改 `lib/` `server/` 或对外接口的人，动手前必读 |
 | [API.md](API.md) | HTTP 路由与 MCP 工具的逐个参数、返回形状、错误码、curl 例子 | 要接面板、写脚本、做二次开发的人 |
 | [LAYOUT.md](LAYOUT.md) | 目录与分工速览（运行时 / 入口 / 工具 / 测试与文档）+ 三条硬规矩 | 第一次进仓库的人 |
 | [PERF.md](PERF.md) | 性能预算与基准数字、`npm run bench` 怎么跑、已经做掉的健壮性、以及**有意识不做**的事 | 觉得「慢」或者想加缓存之前 |

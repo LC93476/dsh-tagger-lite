@@ -1,24 +1,22 @@
 # DSh Tagger · 契约
 
-这份文档是**唯一权威的核心契约**：模块边界、运行时对象、配置键、路由返回形状、SPI、客户端门面。
+这份文档是**唯一权威的核心契约**：模块边界、运行时对象、配置键、路由返回形状、SPI、门禁命令。
 HTTP/MCP 的逐条参数与示例不在这里，看 [`API.md`](./API.md)。
 
 据此写扩展的人只需要记住一句：核心代码（`lib/tags.js` / `lib/forge.js` / `lib/refine.js` / `lib/comfy.js`）
 **不 import 任何外部东西**，扩展只能从 SPI 注册表插进来 —— 卸载时整批 dispose，不会留尾巴。
 
 历史沿革：曾被拆成 `CONTRACT.md`（并行开发分工）+ `CONTRACTS.md`（扩展契约）两份，现已合并为本文件，
-`CONTRACTS.md` 已删除，内容全部在本文件第 5～10 节。
+`CONTRACTS.md` 已删除，内容全部在本文件第 5～9 节。
 
 ## 1. 目录与职责
 
 | 路径 | 职责 |
 | --- | --- |
-| `index.js` | 宿主入口（Phase 6.1 后只剩编排，112 行）：五个命名导出 `name` / `inject` / `createRuntime` / `createHandlers` / `apply`；装配 runtime、注册 HTTP 前缀（新 `/tagger/api` + 旧 `/prompt-forge/api`）、注册 MCP 工具 |
-| `lib/cordis/adapter.js` | 宿主适配层：`createLogger` / `normalizeBaseUrl` / `apiUrl` / `chatCompletionsUrl` / `modelsUrl` / `clampTimeout` / `llmSettings` / `createContextAdapter`（`server/shims.mjs` 与 `index.js` 共用，端点拼接只此一处） |
+| `index.js` | 独立服务装配入口：`createRuntime(ctx, rawConfig)` 造运行时、`createHandlers(rt)` 出 HTTP 路由表；`server/standalone.mjs` 把路由挂到 `/tagger/api`（旧前缀 `/prompt-forge/api` 同时注册） |
+| `lib/cordis/adapter.js` | 适配层（日志 / 连接 / 最小 ctx）：`createLogger` / `normalizeBaseUrl` / `apiUrl` / `chatCompletionsUrl` / `modelsUrl` / `clampTimeout` / `llmSettings` / `createContextAdapter`（`server/shims.mjs` 与 `index.js` 共用，端点拼接只此一处） |
 | `lib/cordis/config.js` | `PLUGIN` / `VERSION` / `configView(rt)`（apiKey 只回 `apiKeySet` + `apiKeyHint`）/ `persistPatch(rt, patch)` |
-| `lib/cordis/commands.js` | 模型工具注册 `registerTools(ctx, rt)` + 系统提示词注入 `registerSystemPromptSection(ctx, rt)`（受 `purge.injectIntoAgentPrompt` 控制） |
-| `lib/cordis/handlers.js` | `createHandlers(rt)`：26 条 HTTP 路由（`/forge` `/refine` `/run` `/job` `/upload` `/pose-thumb` `/spi` `/config` `/purge` `/state` `/health` `/mcp` 等） |
-| `client.js` | 浏览器端面板门面（`window.__ModuleLoader__.load` 工厂），侧边栏图标 + better-sidebar 页签；实现拆在 `client/` 下 |
+| `lib/cordis/handlers.js` | `createHandlers(rt)`：HTTP 路由表（`/forge` `/refine` `/run` `/job` `/upload` `/pose-thumb` `/spi` `/config` `/purge` `/state` `/health` `/mcp` 等，逐条见 `docs/API.md`） |
 | `lib/tags.js` | 标签索引**统一入口**（转发层）；实现拆在 `lib/tags/`：`text.js` 纯归一、`loader.js` 读盘/overlay/建索引、`matcher.js` 检索与 canonicalize、`index.js` 懒加载与单例 |
 | `lib/forge.js` | 锻造器：白话 → 调 LLM → 解析 JSON → 词形修复 → 姿势补词 → 去重合序 → 标签串 |
 | `lib/repair.js` | 词形修复：库里不存在的写法按 hyphen / apostrophe / spacing / plural / swap / suggest 阶梯纠回 |
@@ -37,7 +35,7 @@ HTTP/MCP 的逐条参数与示例不在这里，看 [`API.md`](./API.md)。
 | `lib/routes.js` | 路由表与 dispatch（前缀可换，支持旧前缀共存） |
 | `lib/config.js` | 默认配置与归一化（`DEFAULTS` + `normalize`） |
 | `lib/poses.js` | 姿势目录与缩略图查找（`createPoseCatalog` / `poseImage`） |
-| `server/standalone.mjs` | 脱离 DSH 的独立 HTTP 服务（web 版入口） |
+| `server/standalone.mjs` | 独立 HTTP 服务入口（web 版）：起进程、挂 `/tagger/api` 路由、托管 `/public` |
 | `server/shims.mjs` | **纯 Cordis 生命周期垫片**：`createContext` + 8 个传输层名字再导出，≤12KB（有测试护栏） |
 | `lib/cordis/host.js` | 独立模式的 ctx 装配与织入：llm / webServer / tools 三个传输层的实现正文 |
 | `server/public/` | Web 面板静态资源，由独立服务的 `/public` 前缀提供（白名单扩展名 + 三重防穿越 + `no-cache`/ETag）：`panel.css` / `api.js` / `state.js` / `render.js`（灯 / 结果卡 / 错误码表）/ `settings.js`（LLM 与 ComfyUI 设置、工作流下拉、参考图行）/ `history.js`（历史、姿势弹窗、出图轮询、`localStorage` 参数记忆）/ `app.js`（只管 boot 与事件绑定） |
@@ -53,7 +51,7 @@ HTTP/MCP 的逐条参数与示例不在这里，看 [`API.md`](./API.md)。
 | `deploy.cmd` / `deploy.sh` | 三行转发（`call start.cmd %*` / `exec start.sh "$@"`），只为兼容老入口 |
 | `Dockerfile` / `docker-compose.yml` / `.env.example` | 容器镜像 `dsh-tagger:0.2.0`，端口 `DSH_TAGGER_PORT`，数据卷 `tagger-data`，`healthcheck` 打 `/tagger/api/health` |
 | `data/tags/*.jsonl` | 随包词表补丁（overlay）；用户词表在 `<dataDir>/tags/`，改了热重载 |
-| `docs/CONTRACT.md` | **本文件**：唯一权威核心契约（目录 / 配置 / 路由 / refine / forge / tags / SPI / 客户端 / 门禁） |
+| `docs/CONTRACT.md` | **本文件**：唯一权威核心契约（目录 / 配置 / 路由 / refine / forge / tags / SPI / 门禁） |
 | `docs/API.md` | 接口手册（HTTP 路由表 + MCP 工具 + 示例） |
 | `docs/LAYOUT.md` | 目录与分工速览（运行时 / 入口 / 工具 / 测试与文档）+ 三条硬规矩 |
 | `docs/PERF.md` | 实测性能数字、预算表、健壮性清单（`scripts/dev/bench.mjs`） |
@@ -64,12 +62,12 @@ HTTP/MCP 的逐条参数与示例不在这里，看 [`API.md`](./API.md)。
 
 ```js
 {
-  ctx,        // 宿主上下文；独立服务下是 server/shims.mjs → lib/cordis/host.js 造的最小对象
+  ctx,        // 可选服务注入：独立服务下是 server/shims.mjs → lib/cordis/host.js 造的最小对象（llm 可缺席）
   config,     // 归一化后的配置，键见第 3 节
   log,        // { info, warn, error }
   dir,        // 数据目录，默认 ~/.dsh-tagger
   tags,       // createTagIndex(...) 的索引对象
-  llm,        // 宿主 llm 服务（ctx.get("llm")），独立服务下是注入的 shim，可能 undefined
+  llm,        // 可选 llm 服务（ctx.get("llm")）；缺席时 forge / refine 按 config.llm 直连
   spi,        // createRegistry({ logger, config })
   poses,      // createPoseCatalog(...)
   forge,      // createForge({ config, llm, tags, logger, spi })
@@ -101,17 +99,16 @@ comfy / forge / mcp 三个模块共用这一层；新增一个后端时必须复
 `lib/comfy-workflow.js` 是**纯函数层**：API/UI 格式判定、正负向节点映射、`vars` → 节点输入、schema → 变量面、history → 状态摘要，不碰网络。`lib/comfy.js` 把它整份 re-export（`WORKBENCH_DIR` / `resolveWorkflowDir` / `isUiFormat` / `resolveTextMapping` / `applyVars` 仍从 `lib/comfy.js` 引得到），所以外部 import 一行都不用改。
 ## 3. 配置契约（`lib/config.js` 的 `DEFAULTS`）
 
-**键只能新增，不许改名** —— 面板回填、`cordis.patch.yml`、用户已有 `settings.json` 都按这些名字读。
+**键只能新增，不许改名** —— 面板回填、用户已有 `settings.json` 都按这些名字读。
 
 | 键 | 默认 | 说明 |
 | --- | --- | --- |
-| `llm.provider` / `llm.model` | `opencode-go` / `deepseek-v4.1-flash` | 宿主 llm 服务的 provider 与模型 id |
-| `llm.reasoningEffort` | `""` | 留空表示用宿主默认 |
+| `llm.provider` / `llm.model` | `opencode-go` / `deepseek-v4.1-flash` | 模型 provider 与模型 id |
+| `llm.reasoningEffort` | `""` | 留空表示用服务默认 |
 | `llm.maxTokens` / `llm.timeoutMs` | `4000` / `120000` | 截断会自动翻倍重试，天花板 16000 |
-| `llm.baseUrl` / `llm.apiKey` | `""` | **只在没有宿主 llm 时用**（独立服务 / web 版） |
+| `llm.baseUrl` / `llm.apiKey` | `""` | **独立服务的模型接口地址与 key**（OpenAI 兼容；`GET /config` 不回明文） |
 | `purge.enabled` / `purge.level` | `true` / `full` | 破甲开关与档位（`off`/`light`/`standard`/`full`/`max`） |
 | `purge.extraDirectives` | `[]` | 追加到破甲层的自定义指令 |
-| `purge.injectIntoAgentPrompt` | `false` | 是否顺带覆写宿主的智能体提示词 |
 | `tags.standards` | `["wd","camie"]` | 标签标准 |
 | `tags.maxTags` | `40` | 正向条数上限 |
 | `tags.weightSyntax` | `comfy` | `comfy`(`(tag:1.2)`) / `a1111` / `plain` |
@@ -126,7 +123,7 @@ comfy / forge / mcp 三个模块共用这一层；新增一个后端时必须复
 | `comfy.positiveNode` / `comfy.negativeNode` | `""` | 无 schema 时手工指定正/负向节点 id |
 | `comfy.pollIntervalMs` / `comfy.timeoutMs` | `1000` / `900000` | 轮询间隔与出图超时（整张图的总预算） |
 | `comfy.submitTimeoutMs` | `120000` | **单次** HTTP（提交 / 上传 / 探活）的等待上限，夹在 5000–600000；别拿它跟 `timeoutMs` 混用 |
-| `ui.sidebarTab` / `ui.keepHistory` | `true` / `20` | 侧栏页签开关与历史保留条数 |
+| `ui.keepHistory` | `20` | 面板历史保留条数 |
 
 ## 4. 路由契约（`lib/routes.js`）
 
@@ -271,53 +268,15 @@ applyPostProcessors(result, ctx), searchProviders(term, limit), describe()
 
 `describe()` 的形状（`GET /tagger/api/spi` 原样返回）：`{ version, slots: {每个槽位: [{id,label}]}, hooks: {每个钩子: [id]}, backends: [{id,label}] }`。
 
-## 9. 客户端契约（`client.js`）
-
-```js
-window.__ModuleLoader__.load({
-  id: "dsh-tagger",
-  factory(require) {
-    const React = require("react")
-    return { inject: ["slots"], apply(ctx) { /* 注册面板 */ } }
-  },
-})
-```
-
-两个入口：
-
-- 侧边栏图标：`slots.inject("sidebar.panellist", () => slots.register({ name: "sidebar.panellist", id, order, label }, Icon))`
-- 主面板：`slots.inject("main", () => slots.register({ name: "main", key: id }, Panel))`
-- better-sidebar 页签（可选服务）：`ctx.inject(["betterSidebar"], scope => scope.effect(() => { const d = scope.betterSidebar.registerTab({ id, title, description, icon, order, single: true, component }); return () => d() }, "tagger: tab"))`
-
-**坑**：`locale` / `betterSidebar` 只能通过 `ctx.inject([...], fn)` 取，直接 `ctx.get(...)` 拿到 undefined 且插件会被标 failed。
-
-文案：`client/locale.js` 的内嵌 `dict` 与 `locale/zh.json`、`locale/en.json` 是**三份副本**，加键必须三处同改
-（`tests/render.test.mjs` 会检查裸键）。样式只用宿主 token（`--dsw-alias-*` / `--dsw-radius-*`），类名前缀 `.ptf-`。
-
-### 子模块怎么加载（重要，别自己发明）
-
-宿主只把**包根**的 `client.js` 当 classic script 执行（`__ModuleLoader__.load({ id, factory })` 的工厂里不能有
-顶层 `import` / `export`）；`client/` 子目录浏览器拿不到，宿主的 `/plugins/<id>/client.<name>.js` 只认包根且要 `?rev=`。
-所以子模块走插件自己的路由：
-
-- 路由：`GET /tagger/api/_mod/client/<name>.js`（旧前缀同样可用）→ `text/javascript; charset=utf-8` + `no-store`；
-  名字白名单 `/^client\/[a-z0-9][a-z0-9-]*\.js$/`（只一层，不许子目录/大写/反斜杠），其余 `400 bad-module`，缺文件 `404 no-module`。
-- `client.js` 门面：`factory` 里 `const mod = await import(base + "client/panel.js")`，**React 显式传进去**：
-  `mod.create({ React, ctx, apiPrefix, locale })`。子模块是纯 ESM，禁止裸 import（拿不到 React）、禁止顶层 await。
-- 基址顺序：`globalThis.__DSH_TAGGER_MODBASE__`（测试用 `file://.../client/`）→ `/tagger/api/_mod/client/` → 失败再试 `/prompt-forge/api/_mod/client/`。
-  **注意末尾的 `client/` 段不能省**：路由白名单要求路径是 `client/<名字>.js`，写成 `/_mod/panel.js` 会被宿主判 `400 bad-module`。
-- **加载失败不许把插件弄成 failed**：整块 try/catch，失败只注册一张极简错误卡（错误 message + 「重启宿主」提示），
-  `apply` 照常返回。宿主判 failed 会导致整个面板入口消失，比没有子模块糟糕得多。
-- `slots.inject/register` 是同步注册语义：先 `await` 到组件，再在 `apply` 里同步注册，不要把注册写在 await 之后。
-
-## 10. web 版 / 别的宿主怎么接
+## 9. 独立服务的最小 ctx
 
 `server/shims.mjs` 做的就是「自己造一个最小 ctx」：`get(service)` 认 `llm` / `webServer` / `tools`，
-`effect(fn)` 返回 dispose，`inject(deps, fn)` 给可选服务。只要宿主能提供
-`llm`（`stream({provider, model, messages})` 产出 `{type:"text-delta",text}` / `{type:"finish",kind}`）与
-`webServer`（`register({ kind: "prefix", path, handler }) -> dispose`），整套 `/tagger/api` 就活了。
+`effect(fn)` 返回 dispose，`inject(deps, fn)` 给可选服务。独立服务里只有 `llm` 是可选注入：给了就用
+`stream({provider, model, messages})` 产出 `{type:"text-delta",text}` / `{type:"finish",kind}`，不给就按 `config.llm`
+直连 OpenAI 兼容接口；`webServer` 由 shims 自己实现（`register({ kind: "prefix", path, handler }) -> dispose`），
+整套 `/tagger/api` 就活了。
 
-## 11. 门禁（改完必须过）
+## 10. 门禁（改完必须过）
 
 ```bash
 npm run check:tags     # 词表结构自检（data/tags/*.jsonl 每行合法 + 同文件 tag 不重复）
@@ -337,7 +296,7 @@ npm run bench          # 本地计算层基准，超预算 exit 1（见 docs/PER
 CI 步骤依次是 `npm install` → `npm run check:tags` → `npm run typecheck` → `npm test`
 （`check:overlay` / `check:layout` 是纯静态体检，本地跑，CI 不跑）。
 
-**本机没有 `node` 命令时**（只有宿主自带的 Electron）：用
+**本机没有 `node` 命令时**（只有 DeepSeek Harness 自带的 Electron）：用
 `ELECTRON_RUN_AS_NODE=1 "<DeepSeek Harness.exe>" scripts/dev/run-tests.mjs`，
 同理 `... scripts/tags/check-tags.mjs` / `... scripts/tags/check-overlay-tags.mjs` / `... scripts/dev/check-layout.mjs` /
 `... /tmp/tsdk/package/lib/tsc.js -p tsconfig.json`。
@@ -346,7 +305,7 @@ CI 步骤依次是 `npm install` → `npm run check:tags` → `npm run typecheck
 
 `tsconfig.json` 是 `allowJs` + `checkJs` + `noEmit`：改的是 JS，检查的是错误用法（拼错的字段、传错参数）。
 
-## 12. 兼容与版本
+## 11. 兼容与版本
 
 - `SPI_VERSION = 1`：槽位/钩子名变了才跳版本，新增槽位算兼容。
 - HTTP 前缀 `/tagger/api`；旧前缀 `/prompt-forge/api` 同时注册（`LEGACY_PREFIX`）。

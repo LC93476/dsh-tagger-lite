@@ -19,11 +19,8 @@
     ]
   },
   "include": [
-    "types/**/*.d.ts",
     "index.js",
-    "client.js",
     "lib/**/*.js",
-    "client/**/*.js",
     "server/**/*.mjs",
     "bin/**/*.mjs",
     "scripts/**/*.mjs",

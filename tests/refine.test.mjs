@@ -59,7 +59,7 @@ function fakeTags(map = CN) {
 function makeConfig(patch = {}) {
   return {
     llm: { provider: 'opencode-go', model: 'deepseek-v4.1-flash', reasoningEffort: '', maxTokens: 4000, timeoutMs: 3000 },
-    purge: { enabled: true, level: 'full', extraDirectives: [], injectIntoAgentPrompt: false, ...(patch.purge ?? {}) },
+    purge: { enabled: true, level: 'full', extraDirectives: [], ...(patch.purge ?? {}) },
     tags: { standards: ['wd', 'camie'], maxTags: 40, weightSyntax: 'comfy', chineseAlias: true, ...(patch.tags ?? {}) },
     refine: {
       mode: 'add',
