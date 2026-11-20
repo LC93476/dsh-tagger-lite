@@ -1,19 +1,8 @@
-{"tag":"standing","cn":"站立","postCount":2500000,"kind":"general","aliases":["站着"]}
-{"tag":"sitting","cn":"坐着","postCount":1200000,"kind":"general","aliases":["坐姿"]}
-{"tag":"kneeling","cn":"跪着","postCount":400000,"kind":"general","aliases":["跪姿"]}
-{"tag":"lying","cn":"躺着","postCount":400000,"kind":"general","aliases":["躺姿"]}
-{"tag":"on_back","cn":"仰卧","postCount":300000,"kind":"general","aliases":["仰躺"]}
-{"tag":"on_stomach","cn":"趴着","postCount":200000,"kind":"general","aliases":["俯卧"]}
-{"tag":"on_side","cn":"侧卧","postCount":150000,"kind":"general","aliases":["侧躺"]}
-{"tag":"walking","cn":"走路","postCount":200000,"kind":"general","aliases":["行走"]}
-{"tag":"running","cn":"奔跑","postCount":150000,"kind":"general","aliases":["跑步"]}
-{"tag":"jumping","cn":"跳跃","postCount":100000,"kind":"general"}
-{"tag":"dancing","cn":"跳舞","postCount":80000,"kind":"general"}
-{"tag":"leaning_forward","cn":"前倾","postCount":300000,"kind":"general"}
-{"tag":"arms_up","cn":"举手","postCount":300000,"kind":"general"}
-{"tag":"hands_up","cn":"双手举起","postCount":200000,"kind":"general"}
-{"tag":"hand_on_hip","cn":"手叉腰","postCount":100000,"kind":"general"}
-{"tag":"arms_behind_back","cn":"双手背后","postCount":80000,"kind":"general"}
-{"tag":"spread_arms","cn":"张开双臂","postCount":100000,"kind":"general"}
-{"tag":"dynamic_pose","cn":"动态姿势","postCount":100000,"kind":"general"}
-{"tag":"contrapposto","cn":"对立式站姿","postCount":80000,"kind":"general","aliases":["重心偏移站姿"]}
+{"tag":"walking","cn":"行走","postCount":53991,"kind":"general","aliases":["走路","迈步走","在路上走"]}
+{"tag":"running","cn":"奔跑","postCount":44472,"kind":"general","aliases":["跑起来","跑步","奔跑动作"]}
+{"tag":"jumping","cn":"跳跃","postCount":32030,"kind":"general","aliases":["跳起来","跃起","腾空跳"]}
+{"tag":"dancing","cn":"跳舞","postCount":22860,"kind":"general","aliases":["舞动","在跳舞","舞蹈"]}
+{"tag":"v","cn":"V 字手势","postCount":234454,"kind":"general","aliases":["比耶","剪刀手","V 手势"]}
+{"tag":"hands_up","cn":"双手举起","postCount":274942,"kind":"general","aliases":["举手示意","举起双手","双手抬高"]}
+{"tag":"spread_arms","cn":"张开双臂（大幅度）","postCount":28255,"kind":"general","aliases":["双臂大张","摊开双手","张开手"]}
+{"tag":"dynamic_pose","cn":"动感姿势","postCount":3869,"kind":"general","aliases":["动作夸张","很有张力的姿势","动态构图"]}

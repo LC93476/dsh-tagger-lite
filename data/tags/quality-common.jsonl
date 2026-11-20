@@ -1,7 +1,30 @@
-{"tag":"masterpiece","cn":"杰作（质量词）","postCount":500000,"kind":"general","aliases":["精品","神作"]}
-{"tag":"highres","cn":"高分辨率","postCount":400000,"kind":"general","aliases":["高清"]}
-{"tag":"absurdres","cn":"超高分辨率","postCount":200000,"kind":"general","aliases":["极高分辨率"]}
-{"tag":"ultra_detailed","cn":"超精细","postCount":100000,"kind":"general","aliases":["极其精细","超细节"]}
-{"tag":"very_aesthetic","cn":"极美画风","postCount":50000,"kind":"general","aliases":["雅致"]}
-{"tag":"newest","cn":"最新素材风格","postCount":80000,"kind":"general","aliases":["新作"]}
-{"tag":"bad_quality","cn":"低质量","postCount":60000,"kind":"general","aliases":["质量差"]}
+{"tag":"masterpiece","cn":"杰作（评分词，管线会丢）","postCount":500000,"aliases":["杰作","质量词","评分词"]}
+{"tag":"highres","cn":"高分辨率（评分词，管线会丢）","postCount":400000,"aliases":["高分辨率","质量词","评分词"]}
+{"tag":"absurdres","cn":"超高分辨率（评分词，管线会丢）","postCount":200000,"aliases":["超高分辨率","质量词","评分词"]}
+{"tag":"ultra_detailed","cn":"超精细（评分词，管线会丢）","postCount":100000,"aliases":["超精细","质量词","评分词"]}
+{"tag":"very_aesthetic","cn":"极具美感（评分词，管线会丢）","postCount":50000,"aliases":["极美画风","质量词","评分词"]}
+{"tag":"newest","cn":"最新（评分词，管线会丢）","postCount":80000,"aliases":["最新素材风格","质量词","评分词"]}
+{"tag":"bad_quality","cn":"低质量（评分词，管线会丢）","postCount":60000,"aliases":["低质量","质量词","评分词"]}
+{"tag":"best_quality","cn":"最高质量（评分词，管线会丢）","postCount":0,"aliases":["最高画质","best quality","满分画质"]}
+{"tag":"good_quality","cn":"高质量（评分词，管线会丢）","postCount":0,"aliases":["高质量","good quality","好画质"]}
+{"tag":"normal_quality","cn":"普通质量（评分词，管线会丢）","postCount":0,"aliases":["普通质量","normal quality","一般画质"]}
+{"tag":"shiny_skin","cn":"光泽皮肤","postCount":156361,"aliases":["光泽皮肤","皮肤发亮","油亮皮肤","汗湿发亮"]}
+{"tag":"reflection","cn":"倒影","postCount":55851,"aliases":["倒影","镜面反射","映在上面","反光倒影"]}
+{"tag":"shiny","cn":"光泽","postCount":4817,"aliases":["光泽","发亮","亮面","有反光"]}
+{"tag":"high_contrast","cn":"高对比度","postCount":4803,"aliases":["高对比","对比强烈","明暗反差大"]}
+{"tag":"motion_blur","cn":"动态模糊","postCount":34599,"aliases":["动态模糊","运动模糊","动作残影","有速度感"]}
+{"tag":"film_grain","cn":"胶片颗粒","postCount":26463,"aliases":["胶片颗粒","颗粒感","噪点","胶片质感"]}
+{"tag":"chromatic_aberration","cn":"色差（色散）","postCount":38325,"aliases":["色差","边缘色散","颜色外溢","镜头色散"]}
+{"tag":"bokeh","cn":"焦外成像","postCount":10668,"aliases":["焦外","光斑虚化","背景光斑","虚化光点"]}
+{"tag":"vignetting","cn":"镜头暗角","postCount":2738,"aliases":["暗角","四角压暗","边缘变暗"]}
+{"tag":"texture","cn":"质地","postCount":938,"aliases":["质感","质地","材质感"]}
+{"tag":"soft_focus","cn":"柔焦","postCount":281,"aliases":["柔焦","朦胧","柔化处理","朦胧感"]}
+{"tag":"subsurface_scattering","cn":"次表面散射","postCount":289,"aliases":["次表面散射","皮肤透光","半透明皮肤","透光感"]}
+{"tag":"scanlines","cn":"扫描线","postCount":1100,"aliases":["扫描线","屏幕扫描纹","老屏幕纹理","CRT 纹"]}
+{"tag":"blur_censor","cn":"模糊打码","postCount":5104,"aliases":["模糊打码","模糊处理遮住","糊掉遮挡","打码模糊"]}
+{"tag":"bloom","cn":"泛光","postCount":5374,"aliases":["泛光","光晕溢出","柔光溢出"]}
+{"tag":"caustics","cn":"焦散","postCount":3880,"aliases":["焦散","水面光纹","折射光斑"]}
+{"tag":"blurry_foreground","cn":"模糊前景","postCount":41580,"aliases":["模糊前景","前面糊了","前景虚化"]}
+{"tag":"shiny_clothes","cn":"闪亮衣物","postCount":32404,"aliases":["闪亮衣物","衣服反光","亮片衣服","布料发亮"]}
+{"tag":"reflection_focus","cn":"倒影聚焦","postCount":5887,"aliases":["倒影聚焦","焦点在倒影","倒影特写"]}
+{"tag":"dithering","cn":"抖动","postCount":2280,"aliases":["抖动","网点抖动","像素颗粒"]}

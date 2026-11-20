@@ -1,36 +1,60 @@
-{"tag":"hatsune_miku","cn":"初音未来","postCount":143963,"kind":"character","aliases":["miku","初音","初音ミク"]}
-{"tag":"kagamine_rin","cn":"镜音铃","postCount":40000,"kind":"character","aliases":["rin","镜音リン"]}
-{"tag":"kagamine_len","cn":"镜音连","postCount":35000,"kind":"character","aliases":["len","镜音レン"]}
-{"tag":"megurine_luka","cn":"巡音流歌","postCount":30000,"kind":"character","aliases":["luka","巡音ルカ"]}
-{"tag":"hakurei_reimu","cn":"博丽灵梦","postCount":99664,"kind":"character","aliases":["灵梦","reimu"]}
-{"tag":"kirisame_marisa","cn":"雾雨魔理沙","postCount":86591,"kind":"character","aliases":["魔理沙","marisa"]}
-{"tag":"flandre_scarlet","cn":"芙兰朵露·斯卡雷特","postCount":62433,"kind":"character","aliases":["芙兰","flandre"]}
-{"tag":"remilia_scarlet","cn":"蕾米莉亚·斯卡雷特","postCount":61824,"kind":"character","aliases":["蕾米莉亚","remilia"]}
-{"tag":"izayoi_sakuya","cn":"十六夜咲夜","postCount":50000,"kind":"character","aliases":["咲夜","sakuya"]}
-{"tag":"konpaku_youmu","cn":"魂魄妖梦","postCount":45000,"kind":"character","aliases":["妖梦","youmu"]}
-{"tag":"asuna_(sao)","cn":"亚丝娜","postCount":30000,"kind":"character","aliases":["asuna","结城明日奈"]}
-{"tag":"saber_(fate)","cn":"Saber","postCount":50000,"kind":"character","aliases":["阿尔托莉雅"]}
-{"tag":"toosaka_rin","cn":"远坂凛","postCount":30000,"kind":"character","aliases":["凛","rin"]}
-{"tag":"mash_kyrielight","cn":"玛修·基列莱特","postCount":25000,"kind":"character","aliases":["玛修","mash"]}
-{"tag":"gojo_satoru","cn":"五条悟","postCount":20000,"kind":"character","aliases":["五条"]}
-{"tag":"nezuko_kamado","cn":"灶门祢豆子","postCount":30000,"kind":"character","aliases":["祢豆子"]}
-{"tag":"tanjiro_kamado","cn":"灶门炭治郎","postCount":20000,"kind":"character","aliases":["炭治郎"]}
-{"tag":"son_goku","cn":"孙悟空","postCount":20000,"kind":"character","aliases":["悟空","goku"]}
-{"tag":"uzumaki_naruto","cn":"漩涡鸣人","postCount":25000,"kind":"character","aliases":["鸣人","naruto"]}
-{"tag":"monkey_d_luffy","cn":"蒙奇·D·路飞","postCount":20000,"kind":"character","aliases":["路飞","luffy"]}
-{"tag":"roronoa_zoro","cn":"罗罗诺亚·索隆","postCount":15000,"kind":"character","aliases":["索隆","zoro"]}
-{"tag":"ganyu_(genshin_impact)","cn":"甘雨","postCount":30000,"kind":"character","aliases":["ganyu","甘雨酱"]}
-{"tag":"hu_tao_(genshin_impact)","cn":"胡桃","postCount":25000,"kind":"character","aliases":["hutao","胡桃桃"]}
-{"tag":"raiden_shogun","cn":"雷电将军","postCount":30000,"kind":"character","aliases":["雷神","raiden"]}
-{"tag":"nahida_(genshin_impact)","cn":"纳西妲","postCount":20000,"kind":"character","aliases":["草神","nahida"]}
-{"tag":"furina_(genshin_impact)","cn":"芙宁娜","postCount":20000,"kind":"character","aliases":["furina","水神"]}
-{"tag":"kafka_(honkai:_star_rail)","cn":"卡芙卡","postCount":15000,"kind":"character","aliases":["kafka"]}
-{"tag":"firefly_(honkai:_star_rail)","cn":"流萤","postCount":12000,"kind":"character","aliases":["firefly","萨姆"]}
-{"tag":"march_7th_(honkai:_star_rail)","cn":"三月七","postCount":12000,"kind":"character","aliases":["march7th"]}
-{"tag":"hoshino_(blue_archive)","cn":"小鸟游星野","postCount":10000,"kind":"character","aliases":["星野","hoshino"]}
-{"tag":"shiroko_(blue_archive)","cn":"砂狼白子","postCount":10000,"kind":"character","aliases":["白子","shiroko"]}
-{"tag":"yuuka_(blue_archive)","cn":"早濑优香","postCount":8000,"kind":"character","aliases":["优香","yuuka"]}
-{"tag":"rei_ayanami","cn":"绫波丽","postCount":25000,"kind":"character","aliases":["绫波","rei"]}
-{"tag":"asuka_langley_soryu","cn":"明日香·兰格雷","postCount":25000,"kind":"character","aliases":["明日香","asuka"]}
-{"tag":"zero_two_(darling_in_the_franxx)","cn":"02","postCount":20000,"kind":"character","aliases":["zero two","零二"]}
-{"tag":"yoko_littner","cn":"洋子","postCount":10000,"kind":"character","aliases":["yoko"]}
+{"tag":"hatsune_miku","cn":"初音未来","postCount":143963,"kind":"character","aliases":["初音未来","初音","miku","初音ミク","双马尾歌姬"]}
+{"tag":"kagamine_rin","cn":"镜音铃（VOCALOID）","postCount":25996,"kind":"character","aliases":["镜音凛","rin","镜音リン"]}
+{"tag":"kagamine_len","cn":"镜音连（VOCALOID）","postCount":17124,"kind":"character","aliases":["镜音怜","len","镜音レン"]}
+{"tag":"megurine_luka","cn":"巡音流歌（VOCALOID）","postCount":13846,"kind":"character","aliases":["巡音","luka","巡音ルカ"]}
+{"tag":"hakurei_reimu","cn":"博丽灵梦（东方Project 主角）","postCount":99664,"kind":"character","aliases":["灵梦","reimu","红白巫女"]}
+{"tag":"kirisame_marisa","cn":"雾雨魔理沙（东方）","postCount":86591,"kind":"character","aliases":["魔理沙","marisa","黑白魔法使"]}
+{"tag":"flandre_scarlet","cn":"芙兰朵露·斯卡雷特（东方）","postCount":62433,"kind":"character","aliases":["芙兰","flandre","二小姐"]}
+{"tag":"remilia_scarlet","cn":"蕾米莉亚·斯卡雷特（东方）","postCount":61824,"kind":"character","aliases":["蕾米莉亚","remilia","大小姐"]}
+{"tag":"izayoi_sakuya","cn":"十六夜咲夜（东方）","postCount":52913,"kind":"character","aliases":["咲夜","sakuya","女仆长"]}
+{"tag":"konpaku_youmu","cn":"魂魄妖梦（东方）","postCount":40730,"kind":"character","aliases":["妖梦","youmu","半灵剑士"]}
+{"tag":"saber_(fate)","cn":"Saber／阿尔托莉雅（Fate）","postCount":21138,"kind":"character","aliases":["阿尔托莉雅","saber","亚瑟王"]}
+{"tag":"mash_kyrielight","cn":"玛修·基列莱特（Fate/GO）","postCount":20772,"kind":"character","aliases":["玛修","mash","盾兵"]}
+{"tag":"tohsaka_rin","cn":"远坂凛（Fate）","postCount":10861,"kind":"character","aliases":["凛","rin","远坂"]}
+{"tag":"jeanne_d'arc_(fate)","cn":"贞德（Fate）","postCount":8735,"kind":"character","aliases":["贞德","jeanne","圣女"]}
+{"tag":"scathach_(fate)","cn":"斯卡哈（Fate/GO）","postCount":9483,"kind":"character","aliases":["斯卡哈","师匠","scathach"]}
+{"tag":"saber_alter","cn":"Saber Alter（黑 Saber）","postCount":7271,"kind":"character","aliases":["黑呆","黑 saber","alter 阿尔托莉雅"]}
+{"tag":"asuna_(sao)","cn":"亚丝娜（刀剑神域）","postCount":6078,"kind":"character","aliases":["结城明日奈","asuna","闪光"]}
+{"tag":"kamado_nezuko","cn":"灶门祢豆子（鬼灭之刃）","postCount":3374,"kind":"character","aliases":["祢豆子","nezuko","炭治郎的妹妹"]}
+{"tag":"kamado_tanjirou","cn":"灶门炭治郎（鬼灭之刃）","postCount":2647,"kind":"character","aliases":["炭治郎","tanjiro","灶门"]}
+{"tag":"son_goku","cn":"孙悟空（龙珠）","postCount":7135,"kind":"character","aliases":["悟空","goku","赛亚人"]}
+{"tag":"uzumaki_naruto","cn":"漩涡鸣人（火影忍者）","postCount":5551,"kind":"character","aliases":["鸣人","naruto","七代目火影"]}
+{"tag":"monkey_d._luffy","cn":"蒙奇·D·路飞（海贼王）","postCount":8101,"kind":"character","aliases":["路飞","luffy","草帽"]}
+{"tag":"roronoa_zoro","cn":"罗罗诺亚·索隆（海贼王）","postCount":6421,"kind":"character","aliases":["索隆","zoro","三刀流"]}
+{"tag":"gojo_satoru","cn":"五条悟（咒术回战）","postCount":5647,"kind":"character","aliases":["五条","gojo","最强咒术师"]}
+{"tag":"ganyu_(genshin_impact)","cn":"甘雨（原神）","postCount":20137,"kind":"character","aliases":["甘雨","ganyu","半仙秘书"]}
+{"tag":"hu_tao_(genshin_impact)","cn":"胡桃（原神）","postCount":14515,"kind":"character","aliases":["胡桃","hutao","往生堂堂主"]}
+{"tag":"raiden_shogun","cn":"雷电将军（原神）","postCount":21978,"kind":"character","aliases":["雷神","raiden","影"]}
+{"tag":"nahida_(genshin_impact)","cn":"纳西妲（原神）","postCount":13200,"kind":"character","aliases":["草神","nahida","小吉祥草王"]}
+{"tag":"furina_(genshin_impact)","cn":"芙宁娜（原神）","postCount":13829,"kind":"character","aliases":["芙卡洛斯","furina","水神"]}
+{"tag":"keqing_(genshin_impact)","cn":"刻晴（原神）","postCount":8411,"kind":"character","aliases":["刻晴","keqing","玉衡星"]}
+{"tag":"yae_miko","cn":"八重神子（原神）","postCount":12423,"kind":"character","aliases":["八重","miko","雷元素巫女"]}
+{"tag":"fischl_(genshin_impact)","cn":"菲谢尔（原神）","postCount":4136,"kind":"character","aliases":["皇女","fischl","断罪皇女"]}
+{"tag":"kafka_(honkai:_star_rail)","cn":"卡芙卡（星穹铁道）","postCount":8005,"kind":"character","aliases":["卡芙卡","kafka","星核猎手"]}
+{"tag":"firefly_(honkai:_star_rail)","cn":"流萤（星穹铁道）","postCount":16489,"kind":"character","aliases":["流萤","firefly","萨姆"]}
+{"tag":"march_7th_(honkai:_star_rail)","cn":"三月七（星穹铁道）","postCount":9581,"kind":"character","aliases":["三月七","march7th","粉色三月"]}
+{"tag":"silver_wolf_(honkai:_star_rail)","cn":"银狼（星穹铁道）","postCount":5995,"kind":"character","aliases":["银狼","silver wolf","黑客"]}
+{"tag":"seele_(honkai:_star_rail)","cn":"希儿（星穹铁道）","postCount":1145,"kind":"character","aliases":["希儿","seele","蝶」「"]}
+{"tag":"bronya_rand","cn":"布洛妮娅（星穹铁道）","postCount":1189,"kind":"character","aliases":["布洛妮娅","bronya","大守护者"]}
+{"tag":"hoshino_(blue_archive)","cn":"小鸟游星野（蔚蓝档案）","postCount":15006,"kind":"character","aliases":["星野","hoshino","大叔"]}
+{"tag":"shiroko_(blue_archive)","cn":"砂狼白子（蔚蓝档案）","postCount":11453,"kind":"character","aliases":["白子","shiroko","狼耳"]}
+{"tag":"yuuka_(blue_archive)","cn":"早濑优香（蔚蓝档案）","postCount":18771,"kind":"character","aliases":["优香","yuuka","会计"]}
+{"tag":"arona_(blue_archive)","cn":"阿罗娜（蔚蓝档案）","postCount":7832,"kind":"character","aliases":["阿罗娜","arona","系统 AI"]}
+{"tag":"aru_(blue_archive)","cn":"陆八魔阿露（蔚蓝档案）","postCount":7600,"kind":"character","aliases":["阿露","aru","便利屋 68"]}
+{"tag":"amiya_(arknights)","cn":"阿米娅（明日方舟）","postCount":11966,"kind":"character","aliases":["阿米娅","amiya","近卫兔"]}
+{"tag":"surtr_(arknights)","cn":"史尔特尔（明日方舟）","postCount":5279,"kind":"character","aliases":["史尔特尔","surtr","火山"]}
+{"tag":"ayanami_rei","cn":"绫波丽（EVA）","postCount":10399,"kind":"character","aliases":["绫波","rei","第一适格者"]}
+{"tag":"souryuu_asuka_langley","cn":"明日香·兰格雷（EVA）","postCount":17414,"kind":"character","aliases":["明日香","asuka","惣流明日香"]}
+{"tag":"2b_(nier:automata)","cn":"2B（尼尔：机械纪元）","postCount":12306,"kind":"character","aliases":["2b","寄叶二号","白裙战斗型"]}
+{"tag":"zero_two_(darling_in_the_franxx)","cn":"02（DARLING in the FRANXX）","postCount":4464,"kind":"character","aliases":["零二","zero two","红皮肤"]}
+{"tag":"yoko_littner","cn":"洋子（天元突破）","postCount":5427,"kind":"character","aliases":["洋子","yoko","狙击手"]}
+{"tag":"yor_briar","cn":"约尔·布莱尔（间谍过家家）","postCount":11348,"kind":"character","aliases":["约尔","yor","荆棘公主"]}
+{"tag":"anya_(spy_x_family)","cn":"阿尼亚·福杰（间谍过家家）","postCount":6738,"kind":"character","aliases":["阿尼亚","anya","读心小女儿"]}
+{"tag":"makima_(chainsaw_man)","cn":"玛奇玛（电锯人）","postCount":10898,"kind":"character","aliases":["玛奇玛","makima","公安恶魔猎人"]}
+{"tag":"frieren","cn":"芙莉莲（葬送的芙莉莲）","postCount":16046,"kind":"character","aliases":["芙莉莲","frieren","精灵魔法使"]}
+{"tag":"tifa_lockhart","cn":"蒂法·洛克哈特（FF7）","postCount":16766,"kind":"character","aliases":["蒂法","tifa","第七天堂"]}
+{"tag":"aerith_gainsborough","cn":"爱丽丝·盖恩斯巴勒（FF7）","postCount":11702,"kind":"character","aliases":["爱丽丝","aerith","卖花女"]}
+{"tag":"chun-li","cn":"春丽（街霸）","postCount":9087,"kind":"character","aliases":["春丽","chun li","百裂脚"]}
+{"tag":"mercy_(overwatch)","cn":"天使（守望先锋）","postCount":3450,"kind":"character","aliases":["mercy","慈悲","辅助天使"]}
+{"tag":"shinomiya_kaguya","cn":"四宫辉夜（辉夜大小姐）","postCount":2566,"kind":"character","aliases":["辉夜","kaguya","副会长"]}
+{"tag":"sakurajima_mai","cn":"樱岛麻衣（青春猪头少年）","postCount":1442,"kind":"character","aliases":["麻衣","mai","学姐"]}

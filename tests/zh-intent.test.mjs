@@ -179,7 +179,9 @@ test('词表一致性：POSE_HINTS 里的 tag 都写在 data/tags/pose-view.json
   }
   const missing = [...new Set([...POSE_TAGS])].filter(tag => !overlay.has(tag))
   assert.deepEqual(missing, [], '短语表引用了词表里没有的 tag：' + missing.join(','))
-  assert.ok(overlay.size >= 90 && overlay.size <= 160, '词表行数应在 90–160，实际 ' + overlay.size)
+  // 上界跟着 pose-view.jsonl 的扩容目标走（task-30 之后是 274 行）：留一点余量，但不放开，
+  // 否则这个断言就退化成「非空」了。下界保留，防止词表被误清空。
+  assert.ok(overlay.size >= 90 && overlay.size <= 280, '词表行数应在 90–280，实际 ' + overlay.size)
 })
 test('真机踩到的漏口语：回头 / 正后方 / 跪在床边 / 俯拍 / 翘起屁股', () => {
   // 用户真会这么说话，早先这些说法一个都没命中
