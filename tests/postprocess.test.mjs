@@ -4,7 +4,7 @@
  * 跑法（本机没有 node 命令，用 Electron 当 node）：
  *   cd "/d/DSh tagger-lite" && ELECTRON_RUN_AS_NODE=1 "C:/Users/<你的用户名>/AppData/Local/Programs/DeepSeek Harness/DeepSeek Harness.exe" --test tests/postprocess.test.mjs
  *
- * 覆盖：tag 规范化 / 13 段归类 / 真同义去重 / 上位词降权不删 / 降权幂等 / 词序（服装先于镜头）/
+ * 覆盖：tag 规范化 / 14 段归类 / 真同义去重 / 上位词降权不删 / 降权幂等 / 词序（服装先于镜头）/
  * 补人数（只补 1girl、1boy）/ 人数词存在与多人白话一律不补 / 男性线索与「吉他、其他」误判 /
  * 超上限裁剪 / 未命中词丢弃 / 脏输入不崩 / 与真库对齐（保留下来的都是 matched 真词）/
  * 拆分后的结构约束：门面导出面不变、规则层与门面共享同一份常量（task-17）。
@@ -47,7 +47,8 @@ after(() => {
 })
 // lib/tags 的 createTagIndex JSDoc 还没列 dir/logger（task-19 的活），这里局部收口
 const live = createTagIndex(/** @type {any} */ ({ dir: scratch, logger: silent }))
-const pp = createPostProcessor({})
+// 质量词置顶另有用例（要显式打开才加），这里统一关掉，免得每条断言都得把三个质量词写进期望值。
+const pp = createPostProcessor({ quality: false })
 
 // 反斜杠在多层字符串里极易数错，统一用码点构造
 const BS = String.fromCharCode(92)
@@ -70,7 +71,7 @@ test('normTag：权重后缀 / 括号 / 空格 / 反斜杠转义统一成小写�
   assert.equal(escapeParens('name_(series)'), 'name_' + BS + '(series' + BS + ')')
 })
 
-test('classifyBucket：13 段的代表词各回各家，没见过的落 other', () => {
+test('classifyBucket：14 段的代表词各回各家，没见过的落 other', () => {
   assert.equal(classifyBucket('1girl'), 'subject')
   assert.equal(classifyBucket('long_hair'), 'hair')
   assert.equal(classifyBucket('blush'), 'expression')
@@ -83,10 +84,14 @@ test('classifyBucket：13 段的代表词各回各家，没见过的落 other', 
   assert.equal(classifyBucket("worm's_eye_view"), 'camera')
   assert.equal(classifyBucket('bedroom'), 'scene')
   assert.equal(classifyBucket('backlighting'), 'lighting')
-  assert.equal(classifyBucket('best_quality'), 'other')
+  assert.equal(classifyBucket('masterpiece'), 'quality', '质量词单独成段，排在所有人前面')
+  assert.equal(classifyBucket('best_quality'), 'quality')
+  assert.equal(classifyBucket('ultra_detailed'), 'quality', '维度词按词根规则归质量段')
+  assert.equal(classifyBucket('worst_quality'), 'other', '负向侧评分词不许被置顶')
   assert.equal(classifyBucket('完全没见过的词'), 'other')
-  // 桶表顺序即词序：主体在最前，画质在最后
-  assert.equal(BUCKET_INDEX.subject, 0)
+  // 桶表顺序即词序：质量词最前，主体其次，其它最后
+  assert.equal(BUCKET_INDEX.quality, 0)
+  assert.equal(BUCKET_INDEX.subject, 1)
   assert.equal(BUCKET_INDEX.other, BUCKETS.length - 1)
   assert.equal(bucketLabel('camera'), '镜头与构图')
 })
@@ -131,13 +136,14 @@ test('降权是幂等的：连跑两遍权重不会再掉，第二遍没有 chan
   assert.deepEqual(second.changes, [])
 })
 
-test('词序：镜头词即使权重更高也排在服装词后面，同段保持原顺序', () => {
+test('词序：镜头词即使权重更高也排在服装词后面，同段内按 SUBORDER 二级序', () => {
   const out = pp.apply([
     { tag: 'close-up', weight: 1.4 },
     { tag: 'school_uniform', weight: 1.1 },
     { tag: 'from_side', weight: 1.0 },
   ])
-  assert.deepEqual(tagsOf(out.rows), ['school_uniform', 'close-up', 'from_side'])
+  // camera 段内部再分两级：视角（from_side）排在景别（close-up）之前 —— 先定机位再定取景。
+  assert.deepEqual(tagsOf(out.rows), ['school_uniform', 'from_side', 'close-up'])
   const orderChange = out.changes.find(function (item) { return item.kind === 'order' })
   assert.ok(orderChange, '顺序变了要有 order change')
   const bucketChange = out.changes.find(function (item) { return item.kind === 'buckets' })
@@ -189,7 +195,7 @@ test('男性线索补 1boy；「吉他 / 其他」里的他不能误判成男性
   assert.equal(detectGender('少女').female, true)
 })
 
-test('超上限按段优先裁剪：画质词与末尾场景先掉，主体与服装留下', () => {
+test('超上限按段优先裁剪：末尾场景先掉，主体与服装留下（关掉质量词时它们更早被移除）', () => {
   const rows = [
     { tag: '1girl', weight: 1.1 },
     { tag: 'long_hair', weight: 1.0 },
@@ -207,13 +213,42 @@ test('超上限按段优先裁剪：画质词与末尾场景先掉，主体与�
   const kept = tagsOf(out.rows)
   assert.ok(kept.includes('1girl'))
   assert.ok(kept.includes('school_uniform'))
-  assert.ok(!kept.includes('best_quality'), '画质词先被裁掉')
+  // 这里 pp 是 quality:false —— 两个评分词在 ensureQuality 那步就被移除了（不记 trim），
+  // 所以 10 条进来只剩 8 条参与裁剪，裁够 6 条要掉 2 个。
+  assert.ok(!kept.includes('best_quality'), '关掉质量词时评分词直接移除')
+  assert.ok(!kept.includes('absurdres'), '同上')
   assert.ok(!kept.includes('night'), '末尾段先被裁掉')
   const trims = out.changes.filter(function (item) { return item.kind === 'trim' })
-  assert.equal(trims.length, 4)
+  assert.equal(trims.length, 2)
   assert.ok(trims.every(function (item) { return item.reason === 'over-limit' }))
 })
 
+test('质量词置顶：默认配置在串首补一组、模型写过的只留一条并保留权重；关掉时一个都不加', () => {
+  const on = createPostProcessor({})
+  const out = on.apply([
+    { tag: 'school_uniform', weight: 1.2 },
+    { tag: 'masterpiece', weight: 1.3 },
+    { tag: 'smile', weight: 1.0 },
+  ])
+  const kept = tagsOf(out.rows)
+  assert.deepEqual(kept.slice(0, 3), ['masterpiece', 'best_quality', 'highres'], '质量词在最前，按配置顺序')
+  assert.equal(kept.filter(function (tag) { return tag === 'masterpiece' }).length, 1, '模型自己写的那条并进来，不重复')
+  assert.equal(weightOf(out.rows, 'masterpiece'), 1.3, '保留模型给的权重')
+  assert.equal(weightOf(out.rows, 'best_quality'), 1, '补的那条权重 1')
+  assert.deepEqual(kept.slice(3), ['smile', 'school_uniform'], '其余照旧按段排（表情在服装前）')
+  assert.deepEqual(
+    out.changes.map(function (item) { return item.kind }).sort(),
+    ['buckets', 'order'],
+    '质量词置顶不算整理动作（没有 add/trim），只留下本来就有的重排与统计',
+  )
+
+  const off = createPostProcessor({ quality: false })
+  const none = off.apply([{ tag: 'smile', weight: 1.0 }, { tag: 'best_quality', weight: 1.2 }])
+  assert.deepEqual(tagsOf(none.rows), ['smile'], '关掉后连库里真有的评分词也不留')
+
+  const custom = createPostProcessor({ qualityTags: ['absurdres'] })
+  assert.deepEqual(tagsOf(custom.apply([{ tag: 'smile', weight: 1 }]).rows).slice(0, 1), ['absurdres'], 'tags.qualityTags 可自定义')
+})
 test('没命中库的词（matched:false）直接丢掉，不污染 prompt', () => {
   const out = pp.apply([
     { tag: 'face_closeup', weight: 1.3, matched: false },
@@ -321,6 +356,7 @@ const FACADE_EXPORTS = [
   'SYNONYM_GROUPS', 'TOKEN_RULES', 'bucketLabel', 'clampWeight', 'classifyBucket', 'createPostProcessor',
   'dedupeRows', 'default', 'detectGender', 'escapeParens', 'fillSubject', 'formatRows', 'mergeSupersets',
   'normTag', 'normalizeRows', 'orderRows', 'parseRow', 'round2', 'trimRows',
+  'DEFAULT_QUALITY_TAGS', 'SUBORDER', 'ensureQuality',
 ]
 
 test('门面 lib/postprocess.js 的导出面与拆分前一致，default 就是 createPostProcessor', () => {
@@ -338,7 +374,7 @@ test('规则层 rules.js 与门面共享同一份常量对象，实现细节不�
   assert.equal(ppNamespace.TOKEN_RULES, rulesNamespace.TOKEN_RULES)
   assert.equal(ppNamespace.COUNT_WORDS, rulesNamespace.COUNT_WORDS)
   assert.equal(rulesNamespace.SUPERSET_WEIGHT, 0.85)
-  assert.equal(rulesNamespace.BUCKETS.length, 13)
+  assert.equal(rulesNamespace.BUCKETS.length, 14)
   // COUNT_RE / FEMALE_RE / MALE_RE 仍是内部实现，门面不该导出
   assert.equal(Object.keys(ppNamespace).includes('COUNT_RE'), false)
   assert.equal(Object.keys(ppNamespace).includes('FEMALE_RE'), false)

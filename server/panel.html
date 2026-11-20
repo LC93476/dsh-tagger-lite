@@ -11,7 +11,7 @@
 <header>
   <div>
     <h1 id="app-title">DSh Tagger · 锻造台</h1>
-    <div id="app-sub" class="sub">白话 → WD + Camie 标签 → 二次精修 → 直接出图。负向与画质词由 ComfyUI 工作流内置。</div>
+    <div id="app-sub" class="sub">白话 → WD + Camie 标签 → 二次精修 → 直接出图。负向由工作流内置，质量词本地加在串首。</div>
   </div>
   <div class="badges">
     <span class="pill lamp" id="lamp" data-level="full" data-enabled="on" title="破甲状态"><i></i><b>破甲</b> <span id="lamp-text">读取中</span></span>
@@ -59,7 +59,7 @@
       </select></label>
       <button id="save-level" class="ghost">应用档位</button>
       <label title="库里查不到的多词会被改成连字符/撇号写法">词形修复 <input id="fg-repair" type="checkbox" checked></label>
-      <label title="去重、上位词降权、按 13 段稳定排序">去重合序 <input id="fg-postprocess" type="checkbox" checked></label>
+      <label title="去重、上位词降权、质量词置顶、按 14 段稳定排序">去重合序 <input id="fg-postprocess" type="checkbox" checked></label>
       <label title="白话里点到的姿势/视角，直接从本地词库补进来">姿势补全 <input id="fg-posehints" type="checkbox" checked></label>
       <label title="锻造前先从词库捞一批真词喂给模型">候选注入 <input id="fg-candidates" type="checkbox" checked></label>
       <span class="grow"></span>

@@ -122,7 +122,7 @@
   "error.network": "Network request failed",
   "error.config": "Cannot read config",
   "ui.head.title": "DSh Tagger · Forge",
-  "ui.head.sub": "Plain words → WD + Camie tags → refine → render. Negative and quality tags come from the ComfyUI workflow.",
+  "ui.head.sub": "Plain words → WD + Camie tags → refine → render. Negative comes from the workflow; quality tags are added locally at the head.",
   "ui.head.lamp": "Unfiltered",
   "ui.head.level": "Purge level",
   "ui.lang.label": "Language",

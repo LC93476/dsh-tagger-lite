@@ -25,6 +25,8 @@ const silent = { info() {}, warn() {}, error() {} }
 const KNOWN = [
   '1girl', '1boy', 'solo', 'long_hair', 'blue_eyes', 'smile', 'bedroom',
   'worst_quality', 'lowres', 'censored', 'sex', 'cowgirl_position', 'explicit',
+  // 质量词：库里真有的评分词（现编的 highly_detailed 之类故意不放，用来验证伪词会被丢）
+  'masterpiece', 'best_quality', 'highres', 'absurdres', 'very_aesthetic',
 ]
 
 function tagKey(raw) {
@@ -52,6 +54,9 @@ function makeConfig(patch = {}) {
       pollIntervalMs: 1000,
       timeoutMs: 900000,
     },
+    // 这些用例断言的是完整正向串；质量词默认会顶到最前面把期望值全打乱，
+    // 所以默认关掉，需要验证质量词的用例自己 makeConfig({ forge: { quality: true } })。
+    forge: { quality: false, ...(patch.forge ?? {}) },
     ui: { keepHistory: 20, ...(patch.ui ?? {}) },
   }
 }
@@ -368,6 +373,17 @@ test('库里没有的词进 warnings；库未就绪时补一句说明', async ()
   assert.ok(result.warnings.includes('标签库尚未就绪，本条未做全量校对'))
 })
 
+test('库里没有但词根认得出桶的词，插回后仍归到它那一段（不打乱词序）', async () => {
+  // soft_lighting 不在 fake 词库里（真实快照里也没有），但词根规则能认出是光照段。
+  const payload = {
+    positive: [{ tag: '1girl' }, { tag: 'soft_lighting' }, { tag: 'from_side' }, { tag: 'smile' }],
+  }
+  const forge = makeForge({ llm: jsonStream(payload), tags: fakeTags(KNOWN) })
+  const result = await forge.generate({ text: '柔光，侧面' })
+
+  assert.ok(result.warnings.includes('soft_lighting 不在库里'))
+  assert.equal(result.positive, '1girl, smile, from_side, soft_lighting', '不在库里也不许打断段落顺序：主体 → 表情 → 镜头 → 光照')
+})
 test('超过 maxTags 截断并给 warning', async () => {
   const payload = { positive: Array.from({ length: 12 }, (_, i) => ({ tag: 'solo', weight: 1, cn: 'c' + i })) }
   const tags = fakeTags(KNOWN)
@@ -406,7 +422,7 @@ test('options：显式 negative 是唯一负向来源、standards 覆盖、字�
   assert.equal(negativeText.includes('worst_quality'), false, '模型给的负向不该混进来')
 })
 
-test('画质词一律清掉（由 ComfyUI 内置），用户点名的才留', async () => {
+test('画质词：库里真有的评分词交给后处理置顶，模型现编的丢掉', async () => {
   const payload = {
     positive: [{ tag: '1girl' }, { tag: 'masterpiece' }, { tag: 'best_quality' }, { tag: 'highres' }, { tag: 'smile' }],
     negative: [{ tag: 'worst quality' }],
@@ -416,7 +432,7 @@ test('画质词一律清掉（由 ComfyUI 内置），用户点名的才留', as
   assert.equal(result.positive, '1girl, smile')
   assert.equal(result.negative, '')
   assert.equal(result.negativeTags.length, 0)
-  assert.ok(result.warnings.some(text => text.includes('去掉画质词') && text.includes('masterpiece')))
+  assert.equal(result.warnings.some(text => text.includes('画质词')), false, '真评分词不算「现编」，不报警告')
 
   // 模型现编的画质词（highly_detailed / extremely_detailed）也要按画质词处理
   const invented = {
@@ -424,9 +440,22 @@ test('画质词一律清掉（由 ComfyUI 内置），用户点名的才留', as
   }
   const cleaned = await makeForge({ llm: jsonStream(invented) }).generate({ text: '女孩微笑' })
   assert.equal(cleaned.positive, '1girl, detailed_skin, smile', 'highly_detailed 清掉，但 detailed_skin 这种画面词要留')
+  assert.ok(cleaned.warnings.some(text => text.includes('去掉现编的画质词') && text.includes('highly_detailed')))
 
-  const asked = await makeForge({ llm: jsonStream(payload) }).generate({ text: '要 masterpiece 那种画质的女孩微笑' })
-  assert.equal(asked.positive, '1girl, masterpiece, smile', '用户点名的画质词保留')
+  // 打开质量词后，同样这组输入会在串首补一组，模型写过的 masterpiece 并进来、权重更高
+  const withQuality = makeForge({ config: makeConfig({ forge: { quality: true } }), llm: jsonStream(payload) })
+  const boosted = await withQuality.generate({ text: '女孩微笑' })
+  assert.equal(boosted.positive, 'masterpiece, best_quality, highres, 1girl, smile')
+})
+
+test('质量词开关：默认在串首加一组且不重复，quality:false 时一个字都不加', async () => {
+  const payload = { positive: [{ tag: '1girl' }, { tag: 'smile' }, { tag: 'highres', weight: 1.2 }] }
+  const on = await makeForge({ config: makeConfig({ forge: { quality: true } }), llm: jsonStream(payload) }).generate({ text: '女孩微笑' })
+  assert.equal(on.positive, 'masterpiece, best_quality, (highres:1.2), 1girl, smile', '按配置顺序补齐；模型写过的 highres 只留一条并保住权重')
+  assert.equal(on.positive.split('highres').length - 1, 1, 'highres 不许出现两次')
+
+  const off = await makeForge({ llm: jsonStream(payload) }).generate({ text: '女孩微笑' })
+  assert.equal(off.positive, '1girl, smile', '关掉后评分词一个都不留')
 })
 
 test('空输入 → empty-text；模型只给负向 → empty-tags', async () => {

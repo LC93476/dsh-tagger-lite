@@ -71,8 +71,8 @@ curl -s http://127.0.0.1:PORT/tagger/api/forge \
 ```js
 {
   ok: true,
-  positive: '1girl, solo, long_hair, black_hair, purple_eyes, ...',
-  negative: '',                       // 负向与画质词由 ComfyUI 工作流内置，这里为空
+  positive: 'masterpiece, best_quality, highres, 1girl, solo, long_hair, black_hair, purple_eyes, ...',
+  negative: '',                       // 负向交给 ComfyUI 工作流内置；串首质量词由本地按 tags.qualityTags 补
   tags: [{ tag: '1girl', weight: 1, cn: '一个女孩' }],
   notes: '补了构图与光线',
   ms: 14200, model: 'deepseek-v4.1-flash', purgeLevel: 'full',
@@ -117,7 +117,8 @@ CLI `--base-url` / `--api-key` 或环境变量优先于 settings.json。
 | 键 | 默认 | 关掉会怎样 |
 | --- | --- | --- |
 | `repair` | true | 库里查不到的多词不再自动改成连字符/撇号写法，直接进 warnings |
-| `postprocess` | true | 不去重、不降权上位词、不按 13 段排序 |
+| `postprocess` | true | 不去重、不降权上位词、不按 14 段排序 |
+| `quality` | true | 串首不再自动补 `masterpiece, best_quality, highres`，评分词一条都不留（交给工作流内置） |
 | `poseHints` | true | 白话里点到的姿势/视角不再从本地词库补进来 |
 | `candidates` | true | 锻造前不从词库捞候选词喂模型（模型更容易自己猜错拼写） |
 

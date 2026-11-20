@@ -10,7 +10,7 @@ var I18N_KEY = "dsh-tagger:locale.v1";
 var I18N_LANGS = ["zh", "en"];
 var I18N_BUILTIN_ZH = {
   "ui.head.title": "DSh Tagger · 锻造台",
-  "ui.head.sub": "白话 → WD + Camie 标签 → 二次精修 → 直接出图。负向与画质词由 ComfyUI 工作流内置。",
+  "ui.head.sub": "白话 → WD + Camie 标签 → 二次精修 → 直接出图。负向由工作流内置，质量词本地加在串首。",
   "ui.head.lamp": "破甲",
   "ui.head.level": "破甲档",
   "ui.lang.label": "语言",
@@ -52,7 +52,7 @@ var I18N_BUILTIN_ZH = {
   "ui.forge.repair": "词形修复",
   "ui.forge.repairTitle": "库里查不到的多词会被改成连字符/撇号写法",
   "ui.forge.postprocess": "去重合序",
-  "ui.forge.postprocessTitle": "去重、上位词降权、按 13 段稳定排序",
+  "ui.forge.postprocessTitle": "去重、上位词降权、质量词置顶、按 14 段稳定排序",
   "ui.forge.poseHints": "姿势补全",
   "ui.forge.poseHintsTitle": "白话里点到的姿势/视角，直接从本地词库补进来",
   "ui.forge.candidates": "候选注入",

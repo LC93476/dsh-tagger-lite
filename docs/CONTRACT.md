@@ -20,7 +20,7 @@ HTTP/MCP 的逐条参数与示例不在这里，看 [`API.md`](./API.md)。
 | `lib/tags.js` | 标签索引**统一入口**（转发层）；实现拆在 `lib/tags/`：`text.js` 纯归一、`loader.js` 读盘/overlay/建索引、`matcher.js` 检索与 canonicalize、`index.js` 懒加载与单例 |
 | `lib/forge.js` | 锻造器：白话 → 调 LLM → 解析 JSON → 词形修复 → 姿势补词 → 去重合序 → 标签串 |
 | `lib/repair.js` | 词形修复：库里不存在的写法按 hyphen / apostrophe / spacing / plural / swap / suggest 阶梯纠回 |
-| `lib/postprocess.js` | 后处理门面；实现拆在 `lib/postprocess/`：`rules.js` 纯数据（13 段桶表 / 上位词对 / 同义组），`index.js` 六步流程 |
+| `lib/postprocess.js` | 后处理门面；实现拆在 `lib/postprocess/`：`rules.js` 纯数据（14 段桶表 / 段内二级序 / 上位词对 / 同义组），`index.js` 六步流程 |
 | `lib/zh-intent.js` | 中文姿势/视角意图表（`POSE_HINTS`）与候选注入（`selectCandidates`） |
 | `lib/refine.js` | 二次精修门面：在已有标签串上做增量增删/调权，**不重跑整串**；实现拆在 `lib/refine/`（`consts` / `diff` / `prompt` / `apply` / `index`） |
 | `lib/purge.js` | 破甲系统提示词（档位 `off` / `light` / `standard` / `full` / `max`） |
@@ -113,8 +113,10 @@ comfy / forge / mcp 三个模块共用这一层；新增一个后端时必须复
 | `tags.maxTags` | `40` | 正向条数上限 |
 | `tags.weightSyntax` | `comfy` | `comfy`(`(tag:1.2)`) / `a1111` / `plain` |
 | `tags.chineseAlias` | `true` | 中文别名参与匹配 |
+| `tags.qualityTags` | `["masterpiece","best_quality","highres"]` | 自动加在正向串首的质量词；置空数组 = 不加 |
 | `forge.repair` / `forge.postprocess` / `forge.poseHints` / `forge.candidates` | 全 `true` | 三道本地处理与候选注入的开关 |
 | `forge.candidateLimit` | `18` | 注入给模型的词库候选条数 |
+| `forge.quality` | `true` | 质量词置顶与真评分词保留；`false` = 回到「评分词一条都不留、交给 ComfyUI 工作流内置」 |
 | `refine.mode` | `add` | `add` / `edit` / `prune` / `weights` |
 | `refine.maxNewTags` / `refine.temperature` / `refine.maxTokens` / `refine.timeoutMs` / `refine.keepOrder` | `12` / `0.4` / `3000` / `120000` / `true` | 精修预算与顺序策略 |
 | `comfy.baseUrl` | `http://127.0.0.1:8188` | ComfyUI 地址 |
@@ -184,7 +186,7 @@ export function createForge({ config, llm, tags, logger, spi }) -> {
 ```js
 {
   ok, error?, message?,
-  positive, negative,                  // 已按 weightSyntax 格式化，可直接进 CLIPTextEncode
+  positive, negative,                  // 已按 weightSyntax 格式化；positive 以质量词开头，可直接进 CLIPTextEncode
   tags: [{ tag, weight, kind?, cn? }],
   negativeTags: [...],
   standards: ["wd","camie"],
