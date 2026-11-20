@@ -1,0 +1,55 @@
+{
+  "source": "D:\\DSh tagger\\data\\danbooru",
+  "filteredAt": "2026-11-20T08:05:31.330Z",
+  "sfw": true,
+  "minGeneralLines": 20000,
+  "blockedGroups": [
+    "Sex acts",
+    "Simulated sex acts",
+    "Sexual positions",
+    "Sex objects",
+    "Sexual attire",
+    "Nudity",
+    "BDSM and torture",
+    "Pussy",
+    "Ass",
+    "Censorship"
+  ],
+  "removedBy": {
+    "line": 233,
+    "group": 987,
+    "token": 650,
+    "combo": 3,
+    "sanitized": 446
+  },
+  "files": [
+    {
+      "name": "general.jsonl",
+      "lines": 28905,
+      "removed": 1788,
+      "bytes": 5172230,
+      "sha256": "c2ae3182b4b0e671fbe8676b37d736ab453a049fa0239a9f02cad892f7caf658"
+    },
+    {
+      "name": "characters.jsonl",
+      "lines": 35325,
+      "removed": 59,
+      "bytes": 7468613,
+      "sha256": "208726b3b07bfc85cddc83f9ccf3948cace236c7f0f809848f703d865951a072"
+    },
+    {
+      "name": "copyrights.jsonl",
+      "lines": 8400,
+      "removed": 14,
+      "bytes": 2088269,
+      "sha256": "f591f38268d4382856a4f6ffe4fcc49a31d432d4eea56b6d2f9db1c4980ec091"
+    },
+    {
+      "name": "artists.jsonl",
+      "lines": 24869,
+      "removed": 12,
+      "bytes": 4481649,
+      "sha256": "75c844f4afdcc5c64d0ba8873fd01d0084a528d7a4cf31e126a1ed32832c4880"
+    }
+  ]
+}

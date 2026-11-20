@@ -11,7 +11,7 @@
 | `lib/` | 运行时库：`tags/` `forge/` `refine/` `postprocess/` `comfy.js` `workflow-import.js` `mcp.js` `spi.js` `routes.js` `config.js` … | index.js / server/ |
 | `server/` | 独立 web 服务：`standalone.mjs`（入口）`shims.mjs`（可选服务垫片）`panel.html` + `public/`（面板静态资源） | 浏览器 / 容器 |
 | `data/tags/` | 随包补词表（四个主文件 + `seed/` 十三份） | `lib/tags/loader.js` |
-| `data/danbooru/` | 全量词表快照（五份 jsonl + `manifest.json`，由 `scripts/tags/import-dict.mjs` 导入，约 20MB） | `lib/tags/loader.js` 探测顺序里的仓库那一条 |
+| `data/danbooru/` | 全量词表快照（五份 jsonl + `manifest.json`，由 `scripts/tags/import-dict.mjs` 导入，约 20MB）；公开版这里是 `filter-dict.mjs` 过滤出的 SFW 四份（无 `groups.jsonl`，`manifest.sfw === true`） | `lib/tags/loader.js` 探测顺序里的仓库那一条 |
 | `locale/` | 面板文案 `zh.json` / `en.json`（`server/public/i18n.js` 经 `GET /tagger/api/locale` 取） | 浏览器 |
 
 ## 入口（用户双击 / 命令行）
@@ -31,7 +31,7 @@
 | --- | --- | --- |
 | `scripts/setup.mjs` | 安装向导：问端口 / 模型接口 / ComfyUI 目录，写 `<数据目录>/settings.json` | 首次安装，`npm run setup` 或 `start.cmd` 自动调 |
 | `scripts/dev/` | `run-tests.mjs`（串行跑全量）`bench.mjs`（性能基准）`check-layout.mjs`（结构体检） | 开发时 |
-| `scripts/tags/` | `import-dict.mjs`（把本机全量词表导入仓库 `data/danbooru`）`build-tags.mjs`（构建/统计词表）`check-tags.mjs`（结构自检）`check-overlay-tags.mjs`（补词表体检）`suggest-overlay.mjs`（取材） | 改 `data/tags/**` 后 |
+| `scripts/tags/` | `import-dict.mjs`（把本机全量词表导入仓库 `data/danbooru`）`filter-dict.mjs`（把全量快照过滤成公开可用 SFW 快照）`build-tags.mjs`（构建/统计词表）`check-tags.mjs`（结构自检）`check-overlay-tags.mjs`（补词表体检）`suggest-overlay.mjs`（取材） | 改 `data/tags/**` 后 |
 | `scripts/release/` | `pack.mjs`（便携 zip）`pack-inject.mjs`（注入包）`make-public.mjs`（生成公开版）`inject-private.mjs`（私货注入）`ui2api.mjs`（工作流格式转换）`push-to-github.*` | 发版时 |
 | `scripts/assets/make-pose-thumbs.py` | 姿势库 1439 张原图压成 220px 缩略图（需要 Python + PIL） | 换姿势库时 |
 | `scripts/win/` | `stop-tagger.cmd`（按端口停服务）；启停实现已收进根目录 `start.cmd` | Windows |

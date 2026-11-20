@@ -51,7 +51,7 @@ HTTP/MCP 的逐条参数与示例不在这里，看 [`API.md`](./API.md)。
 | `deploy.cmd` / `deploy.sh` | 三行转发（`call start.cmd %*` / `exec start.sh "$@"`），只为兼容老入口 |
 | `Dockerfile` / `docker-compose.yml` / `.env.example` | 容器镜像 `dsh-tagger:0.2.0`，端口 `DSH_TAGGER_PORT`，数据卷 `tagger-data`，`healthcheck` 打 `/tagger/api/health` |
 | `data/tags/*.jsonl` | 随包词表补丁（overlay）；用户词表在 `<dataDir>/tags/`，改了热重载 |
-| `data/danbooru/*.jsonl` | 全量词表快照（general / characters / copyrights / artists / groups + `manifest.json`），由 `scripts/tags/import-dict.mjs` 导入；加载器探测顺序里仓库这一条，命中即 99447 条 |
+| `data/danbooru/*.jsonl` | 全量词表快照（general / characters / copyrights / artists / groups + `manifest.json`），由 `scripts/tags/import-dict.mjs` 导入；加载器探测顺序里仓库这一条，命中即 99447 条。**公开版**放的是 `scripts/tags/filter-dict.mjs` 过滤出的 SFW 四份（无 `groups.jsonl`，`manifest.sfw === true`，约 97497 条） |
 | `docs/CONTRACT.md` | **本文件**：唯一权威核心契约（目录 / 配置 / 路由 / refine / forge / tags / SPI / 门禁） |
 | `docs/API.md` | 接口手册（HTTP 路由表 + MCP 工具 + 示例） |
 | `docs/LAYOUT.md` | 目录与分工速览（运行时 / 入口 / 工具 / 测试与文档）+ 三条硬规矩 |
@@ -226,6 +226,8 @@ index.reload() / index.ensureFresh() -> Promise<boolean>   // overlay 改动热�
 
 数据源（按顺序探测）：`DSH_DANBOORU_DIR` → `~/.dsh-comfyui-workbench/data/danbooru/*.jsonl` → **仓库的 `data/danbooru/*.jsonl`** → `<dataDir>/tags/*.jsonl` → `data/tags/*.jsonl`（包内 overlay）
 → 内置 `lib/seed-tags.js` 兜底。
+
+仓库里那份 `data/danbooru/` 在私有仓是完整快照（99447 条），在公开仓是 `scripts/tags/filter-dict.mjs` 过滤出的 SFW 快照（四份、约 97497 条、`manifest.sfw === true`）；加载器不区分两者，只按 jsonl 读。
 
 ## 8. SPI 契约（`lib/spi.js`）
 

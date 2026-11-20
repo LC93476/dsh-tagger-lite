@@ -42,6 +42,8 @@ npm link && dsh-tagger --help # 用 bin 名，参数同 bin/tagger.mjs
 
 换一份 / 刷新本机词表：`node scripts/tags/import-dict.mjs`（自动探测 `DSH_DANBOORU_DIR`、`~/.dsh-comfyui-workbench/data/danbooru`，也可 `--from <目录>`）；`--check` 只校验不写盘（有源比 sha256，没源就拿 `data/danbooru/manifest.json` 自检），`--dry` 只看计划，目标不同时默认拒绝、覆盖加 `--force`。
 
+公开版（`dsh-tagger-lite`）带的是过滤后的 SFW 快照（约 97497 条，`groups.jsonl` 不带）：生成公开版时 `scripts/tags/filter-dict.mjs` 按 Danbooru 分组与词条名 / 别名 / 备注剔除露骨词，只是别名脏的只摘别名。私有仓自己出一份：`node scripts/tags/filter-dict.mjs`（`--check` 只复检不写盘）。
+
 运行时探测顺序：`--dict-dir` > `DSH_DANBOORU_DIR` > `DSH_COMFYUI_DATA_DIR` > `~/.dsh-comfyui-workbench/data{,/danbooru}` > 仓库的 `data/danbooru` > 父目录的 `dsh-comfyui-workbench/data{,/danbooru}` > 当前目录的 `dsh-comfyui-workbench/data/danbooru` > `<数据目录>/tags`。
 
 一条都探测不到时只用 `data/tags`（seed + overlay，1247 条）：能跑，但中文别名与冷门词覆盖窄，面板会提示。想临时指向别处的词表，在 `settings.json` 写 `"tags": { "dataDirs": ["<词表目录>"] }` 或设 `DSH_DANBOORU_DIR`。
