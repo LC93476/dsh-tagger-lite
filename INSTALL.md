@@ -43,3 +43,4 @@ npm link && dsh-tagger --help # 用 bin 名，参数同 bin/tagger.mjs
 | 起不来、报端口占用 | 换端口（`start.cmd 8090`），或先关掉上一个实例 |
 | 出图为空 / ComfyUI 连不上 | 确认 ComfyUI 在 `127.0.0.1:8188`（docker 用 `host.docker.internal:8188`），面板设置里点一次「测试连接」 |
 | 锻造报模型错误 | 检查 `llm.baseUrl` 与 `apiKey`；`npm run setup --print` 看当前值，`npm run setup` 重填 |
+| Windows 的 cmd 窗口里中文是乱码 | 脚本自己会 `chcp 65001`（文件是 UTF-8 存的）。若你的启动器强制了别的代码页，删掉那行设置或先手动 `chcp 65001` 再跑 |

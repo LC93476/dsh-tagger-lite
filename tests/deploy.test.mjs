@@ -50,6 +50,9 @@ test("一键脚本都有三条路：本机 node / docker / 便携 node", () => {
   assert.match(sh, /bin\/tagger\.mjs/)
 
   const cmd = read("start.cmd")
+  // 脚本是 UTF-8 存的：不切代码页，936 控制台里中文 echo 全是乱码（node 的日志同理）
+  assert.match(cmd, /chcp 65001/, "start.cmd 必须先切 UTF-8 代码页")
+  assert.match(read("scripts/win/stop-tagger.cmd"), /chcp 65001/, "stop 脚本也会 echo 中文，同样要切")
   assert.match(cmd, /where node/)
   assert.match(cmd, /where docker/)
   assert.match(cmd, /:ensureNode/)

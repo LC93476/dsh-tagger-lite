@@ -1,4 +1,4 @@
-# 把 D:/DSh tagger-lite 推到 GitHub：建仓（可选）→ 加 remote → 推 main →（可选）验证 CI 权限。
+﻿# 把 D:/DSh tagger-lite 推到 GitHub：建仓（可选）→ 加 remote → 推 main →（可选）验证 CI 权限。
 #
 # 用法：
 #   scripts\push-to-github.cmd                       普通推送（会问 PAT）

@@ -1,4 +1,8 @@
 @echo off
+chcp 65001 >nul 2>nul
+rem ↑ 切到 UTF-8：本脚本是 UTF-8 存的，默认 936 代码页会把中文 echo 成乱码；顺带让 node 的日志也正常
+rem 让 Windows 自带命令优先（在 Git Bash / MSYS 里跑也不会被同名工具抢走）
+set "PATH=%SystemRoot%\System32;%SystemRoot%;%PATH%"
 rem plan: Windows 一键启动 —— 找 node（本机 → 便携 → 下载便携）→ 首次进向导 → 起服务并开浏览器
 rem
 rem   start.cmd            -> http://127.0.0.1:7789/
