@@ -66,10 +66,10 @@ test('过肩 → over_shoulder', () => {
   assert.deepEqual(hit.tags.map(tag => tag.tag), ['over_shoulder'])
 })
 
-test('侧面 → from_side + profile', () => {
+test('侧面 → from_side（profile 交给 postprocess 的同义组，不在这补）', () => {
   const hit = hint('侧面站姿', 'from_side')
   assert.ok(hit, 'from_side 没命中')
-  assert.deepEqual(hit.tags.map(tag => tag.tag), ['from_side', 'profile'])
+  assert.deepEqual(hit.tags.map(tag => tag.tag), ['from_side'])
 })
 
 test('仰躺双腿抬起 → on_back + legs_up', () => {
@@ -198,4 +198,66 @@ test('真机踩到的漏口语：回头 / 正后方 / 跪在床边 / 俯拍 / �
   for (const expected of ['all_fours', 'kneeling', 'arched_back', 'from_behind', 'looking_back']) {
     assert.ok(tags.includes(expected), '整句漏了 ' + expected + '：' + tags.join(','))
   }
+})
+
+test('鸭子坐是 wariza，不是盘腿：不串 indian_style', () => {
+  for (const said of ['鸭子坐', 'w坐姿', 'W坐姿']) {
+    const hit = hint(said, 'wariza')
+    assert.ok(hit, said + ' 没命中 wariza：' + JSON.stringify(detectPoseHints(said)))
+    assert.deepEqual(hit.tags.map(tag => tag.tag), ['wariza'])
+    assert.ok(!tagsOf(said).includes('indian_style'), said + ' 不该串到 indian_style')
+  }
+  const crossed = hint('盘腿打坐', 'sit_cross_legged')
+  assert.ok(crossed, '盘腿 没命中 sit_cross_legged')
+  assert.deepEqual(crossed.tags.map(tag => tag.tag), ['indian_style', 'crossed_legs'])
+  assert.ok(!tagsOf('盘腿打坐').includes('wariza'), '盘腿 不该命中 wariza')
+})
+
+test('单膝跪是 on_one_knee，不带 seiza', () => {
+  const hit = hint('单膝跪地求婚', 'on_one_knee')
+  assert.ok(hit, 'on_one_knee 没命中：' + JSON.stringify(detectPoseHints('单膝跪地求婚')))
+  assert.deepEqual(hit.tags.map(tag => tag.tag), ['on_one_knee', 'kneeling'])
+  assert.ok(!tagsOf('单膝跪地求婚').includes('seiza'), '单膝跪 不该命中 seiza')
+  // 双膝跪与跪坐还是 kneel 那一档
+  assert.ok(tagsOf('双膝跪地').includes('kneeling'), '双膝跪地 该命中 kneeling')
+  assert.ok(tagsOf('跪坐').includes('seiza'), '跪坐 该命中 seiza')
+})
+
+test('宽泛词不再误触发：多人 / 透视装 / 全景落地窗 / mp3player', () => {
+  const keysOf = described => detectPoseHints(described).map(item => item.key)
+  assert.ok(!keysOf('街上有很多人').includes('group'), '多人 不该命中 group：' + keysOf('街上有很多人').join(','))
+  assert.ok(!keysOf('她穿着透视装').includes('perspective'), '透视装 不该命中 perspective')
+  assert.ok(!keysOf('全景落地窗的房间').includes('full_body'), '全景落地窗 不该命中 full_body')
+  assert.ok(!keysOf('他戴着mp3player跑步').includes('group'), 'mp3player 里的 3p 不该命中 group')
+  assert.ok(!keysOf('v3pro 手柄').includes('group'), 'v3pro 里的 3p 不该命中 group')
+  // 正例一个都不能掉
+  assert.ok(keysOf('群p').includes('group'), '群p 该命中 group')
+  assert.ok(keysOf('3p').includes('group'), '3p 该命中 group')
+  assert.ok(keysOf('强透视').includes('perspective'), '强透视 该命中 perspective')
+  assert.ok(keysOf('全身').includes('full_body'), '全身 该命中 full_body')
+})
+
+test('重叠区里的首次命中被占掉，第二次出现在区外仍要命中', () => {
+  const keys = detectPoseHints('跪趴后入，然后又跪趴').map(item => item.key)
+  assert.ok(keys.includes('doggystyle'), 'doggystyle 没命中：' + keys.join(','))
+  assert.ok(keys.includes('all_fours'), '第二次出现的 跪趴 被整条跳过了：' + keys.join(','))
+})
+
+test('selectCandidates：cn 优先走 tags.get 精确查询，search 作兜底', async () => {
+  const calls = []
+  const fake = {
+    ready: async () => {},
+    get(tag) {
+      calls.push('get:' + tag)
+      return tag === 'all_fours' ? { tag: 'all_fours', cn: '四肢着地（跪趴）' } : null
+    },
+    search(tag) {
+      calls.push('search:' + tag)
+      return []
+    },
+  }
+  const rows = await selectCandidates({ described: '跪趴', tags: fake, limit: 4 })
+  assert.equal(rows[0].tag, 'all_fours')
+  assert.equal(rows[0].cn, '四肢着地（跪趴）', 'cn 没从 tags.get 拿到')
+  assert.ok(calls.includes('get:all_fours'), '没有先走 get 精确查询：' + calls.join(','))
 })

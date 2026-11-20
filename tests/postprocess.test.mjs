@@ -50,6 +50,19 @@ const live = createTagIndex(/** @type {any} */ ({ dir: scratch, logger: silent }
 // 质量词置顶另有用例（要显式打开才加），这里统一关掉，免得每条断言都得把三个质量词写进期望值。
 const pp = createPostProcessor({ quality: false })
 
+// 真库判定（task-44）：tests/_lib-guard.mjs 只看 loaded 条数，而 seed 词表涨到 1200+ 条后
+// 「只有 seed」和「有真库」就分不出来了 —— seedOnly 是索引自己给的标记，比条数可靠。
+function hasDanbooruLibrary(tags) {
+  const stats = typeof tags?.stats === 'function' ? tags.stats() : tags
+  if (!stats || stats.seedOnly === true) return false
+  return Number(stats.loaded ?? 0) > 1000
+}
+function requireDanbooruLibrary(t) {
+  if (hasDanbooruLibrary(live)) return true
+  t.skip('本机只加载到 seed 词表（seedOnly=true），真库用例跳过')
+  return false
+}
+
 // 反斜杠在多层字符串里极易数错，统一用码点构造
 const BS = String.fromCharCode(92)
 
@@ -309,6 +322,7 @@ test('与真库对齐：收拾完留下来的每一个词都是库里 matched �
   await live.ready()
   // 没有 Danbooru 大词表（CI / 干净机器）时，这条真库用例没有意义，跳过
   if (!requireRealLibrary(t, live)) return
+  if (!requireDanbooruLibrary(t)) return
   const raw = [
     '1girl', 'lying', 'on_back', 'profile', 'from_side', 'school_uniform',
     'close-up', 'long_hair', 'best_quality', 'on_bed', 'night', 'blush',
@@ -379,4 +393,62 @@ test('规则层 rules.js 与门面共享同一份常量对象，实现细节不�
   assert.equal(Object.keys(ppNamespace).includes('COUNT_RE'), false)
   assert.equal(Object.keys(ppNamespace).includes('FEMALE_RE'), false)
   assert.equal(Object.keys(ppNamespace).includes('MALE_RE'), false)
+})
+
+// --- 分桶修正（task-44）：括号限定词 / 词根正则的边界 / 贴墙移桶 ---
+
+test('括号后缀不都是角色：_(medium) _(style) 进风格段，服装与道具各回各家', () => {
+  // 括号后缀在真库里长这样：star_(symbol) / charm_(object) / pom_pom_(clothes) /
+  // tapestry_(medium) / mika_pikazo_(style) —— 老规则一律当角色塞进第 2 桶，画风词会跑到角色前面。
+  assert.equal(classifyBucket('watercolor_(medium)'), 'lighting', '媒介就是风格')
+  assert.equal(classifyBucket('tapestry_(medium)'), 'lighting')
+  assert.equal(classifyBucket('mika_pikazo_(style)'), 'lighting', '画师画风归风格段')
+  assert.equal(classifyBucket('shrug_(clothing)'), 'clothing')
+  assert.equal(classifyBucket('pom_pom_(clothes)'), 'clothing', '库里写的是 clothes 不是 clothing')
+  assert.equal(classifyBucket('lekku_(anatomy)'), 'body')
+  assert.equal(classifyBucket('charm_(object)'), 'other')
+  assert.equal(classifyBucket('bow_(weapon)'), 'other')
+  assert.equal(classifyBucket('bat_(animal)'), 'other')
+  assert.equal(classifyBucket('nut_(food)'), 'other')
+  assert.equal(classifyBucket('triangle_(instrument)'), 'other')
+  assert.equal(classifyBucket('stance_(vehicle)'), 'other')
+  // 真角色 / 作品仍然要进第 2 桶
+  assert.equal(classifyBucket('eimi_(blue_archive)_(cosplay)'), 'character')
+})
+
+test('词根正则收紧：close / arch / lean / sex 不再按裸子串误伤', () => {
+  // ^close 收紧成 ^close[-_]up：伞和衣柜不是景别
+  assert.equal(classifyBucket('close-up'), 'camera')
+  assert.equal(classifyBucket('close_up'), 'camera')
+  assert.equal(classifyBucket('closed_umbrella'), 'other', '库内真有这个词，别当特写')
+  assert.notEqual(classifyBucket('closed_umbrella'), 'camera')
+  assert.equal(classifyBucket('closet'), 'other')
+  // arch / lean 加词边界：cleaning 里的 lean 不是姿势
+  assert.equal(classifyBucket('arched_back'), 'pose')
+  assert.equal(classifyBucket('leaning_forward'), 'pose')
+  assert.equal(classifyBucket('cleaning'), 'other', 'cleaning 里含 lean，但不是姿势')
+  assert.notEqual(classifyBucket('cleaning'), 'pose')
+  // sex 加词边界：unisex 不含性行为语义
+  assert.equal(classifyBucket('sex'), 'sexual')
+  assert.equal(classifyBucket('sex_from_behind'), 'sexual')
+  assert.equal(classifyBucket('unisex'), 'other')
+  assert.notEqual(classifyBucket('unisex'), 'sexual')
+  // 贴墙是姿势（与 lib/zh-intent.js 的 靠墙 / 壁咚 同一段），不是性行为细节
+  assert.equal(classifyBucket('against_wall'), 'pose')
+  assert.equal(EXACT_BUCKET.against_wall, 'pose')
+})
+
+test('分桶探针全部是库里真词：规则表不许靠幽灵词自证', async (t) => {
+  await live.ready()
+  if (!requireDanbooruLibrary(t)) return
+  const probes = [
+    'star_(symbol)', 'charm_(object)', 'bow_(weapon)', 'bat_(animal)', 'nut_(food)',
+    'triangle_(instrument)', 'stance_(vehicle)', 'lekku_(anatomy)', 'shrug_(clothing)',
+    'pom_pom_(clothes)', 'watercolor_(medium)', 'tapestry_(medium)', 'mika_pikazo_(style)',
+    'eimi_(blue_archive)_(cosplay)', 'closed_umbrella', 'closet', 'cleaning', 'against_wall',
+    'close-up', 'arched_back', 'leaning_forward', 'sex', 'sex_from_behind', 'bent_over', 'squatting',
+  ]
+  const checked = await live.canonicalizeMany(probes)
+  const ghost = checked.filter(function (item) { return !item.matched }).map(function (item) { return item.raw })
+  assert.deepEqual(ghost, [], '分桶探针里有库里没有的词：' + ghost.join(', '))
 })

@@ -13,7 +13,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
 import http from 'node:http'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, rm, symlink, unlink, writeFile } from 'node:fs/promises'
 import { readFileSync, statSync, utimesSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
@@ -110,9 +110,9 @@ function spawnStandalone(args, env) {
  * fetch / undici 会按 URL 规范把 '/public/../index.js' 折叠成 '/index.js'，路径穿越根本测不出来；
  * 只有裸 http.request 才能把 '..' 原样送到服务器。
  */
-function rawRequest(port, rawPath) {
+function rawRequest(port, rawPath, headers) {
   return new Promise((resolve, reject) => {
-    const req = http.request({ host: '127.0.0.1', port: Number(port), path: rawPath, method: 'GET' }, res => {
+    const req = http.request({ host: '127.0.0.1', port: Number(port), path: rawPath, method: 'GET', headers: headers ?? {} }, res => {
       let body = ''
       res.setEncoding('utf8')
       res.on('data', chunk => {
@@ -463,6 +463,8 @@ test('standalone：面板能填接口与 ComfyUI，保存后立刻生效（不�
     assert.equal(health.llmReady, true, '保存接口后 health 立刻就该说 ready')
     assert.equal(health.llm.endpoint, stubUrl + '/v1/chat/completions')
     assert.equal(health.llm.model, 'stub-model')
+    // 面板存的值就是 settings 层来的：llm.source 要能说清楚（面板改完没生效，一般是 env/cli 盖住了）
+    assert.deepEqual(health.llm.source, { baseUrl: 'settings', apiKey: 'settings', model: 'settings' })
 
     // 测试连接：拿面板填的地址与 key 打 /models
     const probe = await fetch(url + '/tagger/api/llm/probe', {
@@ -500,4 +502,123 @@ test('standalone：面板能填接口与 ComfyUI，保存后立刻生效（不�
     await new Promise(resolve => stub.close(resolve))
     await rm(dataDir, { recursive: true, force: true })
   }
+})
+
+test('standalone：/public 拒软链逃逸，If-None-Match 认弱校验与多值', { timeout: 60000 }, async t => {
+  const dataDir = await mkdtemp(path.join(tmpdir(), 'dsh-tagger-static-'))
+  const secretDir = await mkdtemp(path.join(tmpdir(), 'dsh-tagger-secret-'))
+  const secretFile = path.join(secretDir, 'secret.css')
+  await writeFile(secretFile, 'body { color: #SECRETLEAK }', 'utf8')
+  /** @type {Record<string, string | undefined>} */
+  const env = { ...process.env, DSH_TAGGER_DATA: dataDir, ELECTRON_RUN_AS_NODE: '1' }
+  delete env.DSH_TAGGER_API_KEY
+  delete env.DSH_TAGGER_BASE_URL
+  delete env.DSH_TAGGER_MODEL
+  const child = spawnStandalone(['--port', '0', '--data-dir', dataDir], env)
+  // 软链必须落在 public 里才测得出逃逸（解析器只认这个目录），测完删掉
+  const linkName = '__escape-' + Date.now().toString(36) + '.css'
+  const linkPath = path.join(here, '..', 'server', 'public', linkName)
+  /** @type {string[]} 测试期间在 public 里造的链接，收尾一律拆掉 */
+  const escapeRoot = []
+  try {
+    const url = await waitForReady(child)
+    const port = Number(new URL(url).port)
+
+    const first = await rawRequest(port, '/public/panel.css')
+    assert.equal(first.status, 200)
+    const etag = String(first.headers.etag)
+    assert.match(etag, /^"[0-9a-f]+-[0-9a-f]+"$/)
+    assert.ok(first.body.length > 0)
+
+    // 弱校验：W/ 前缀只表示强弱，内容没变就得 304
+    const weak = await rawRequest(port, '/public/panel.css', { 'if-none-match': 'W/' + etag })
+    assert.equal(weak.status, 304, 'W/ 前缀也要命中')
+    assert.equal(weak.body, '')
+
+    // 多值：浏览器与代理会一次带好几条，命中任意一条都算
+    const multi = await rawRequest(port, '/public/panel.css', { 'if-none-match': '"stale-0", ' + etag + ', "stale-1"' })
+    assert.equal(multi.status, 304, '多值里有一条命中就 304')
+
+    // 通配
+    const star = await rawRequest(port, '/public/panel.css', { 'if-none-match': '*' })
+    assert.equal(star.status, 304, '星号表示任何版本都新鲜')
+
+    // 都不匹配：老实回内容，别乱 304
+    const miss = await rawRequest(port, '/public/panel.css', { 'if-none-match': '"stale-0"' })
+    assert.equal(miss.status, 200)
+    assert.match(String(miss.headers['content-type']), /text\/css/)
+    assert.ok(miss.body.includes('--brand'))
+
+    // 软链逃逸：public 里放个指向外部文件的链接，必须当「没有」，更不许把目标内容吐出去
+    let escapePath = ''
+    try {
+      await symlink(secretFile, linkPath, 'file')
+      escapeRoot.push(linkPath)
+      escapePath = '/public/' + linkName
+      t.diagnostic('逃逸用例：用文件软链')
+    } catch {
+      // Windows 没开开发者模式时文件软链要管理员权限：退一级用 junction（目录级，普通账号能建）
+      const linkDir = path.join(here, '..', 'server', 'public', '__escape-dir-' + Date.now().toString(36))
+      try {
+        await symlink(secretDir, linkDir, 'junction')
+        escapeRoot.push(linkDir)
+        escapePath = '/public/' + path.basename(linkDir) + '/secret.css'
+        t.diagnostic('逃逸用例：用目录 junction')
+      } catch (error) {
+        t.diagnostic('本机建不了软链 / junction（' + String(error?.code) + '），跳过逃逸用例')
+      }
+    }
+    if (escapePath !== '') {
+      const escape = await rawRequest(port, escapePath)
+      assert.equal(escape.status, 404, '指向 public 外的软链一律 404')
+      assert.equal(escape.body.includes('SECRETLEAK'), false, '软链目标的内容绝不能吐出去')
+    }
+  } finally {
+    for (const link of escapeRoot) {
+      await unlink(link).catch(() => {})
+      await rm(link, { recursive: false, force: true }).catch(() => {})
+    }
+    await rm(dataDir, { recursive: true, force: true })
+    await rm(secretDir, { recursive: true, force: true })
+    await stop(child)
+  }
+})
+
+test('standalone：未知参数告警不拦启动，health.version 跟 package.json 一致', { timeout: 60000 }, async () => {
+  const dataDir = await mkdtemp(path.join(tmpdir(), 'dsh-tagger-meta-'))
+  const pkg = JSON.parse(readFileSync(path.join(here, '..', 'package.json'), 'utf8'))
+  /** @type {Record<string, string | undefined>} */
+  const env = {
+    ...process.env,
+    DSH_TAGGER_DATA: dataDir,
+    ELECTRON_RUN_AS_NODE: '1',
+    DSH_TAGGER_BASE_URL: 'http://127.0.0.1:9/v1',
+    DSH_TAGGER_MODEL: 'env-model',
+  }
+  delete env.DSH_TAGGER_API_KEY
+  const child = spawnStandalone(['--port', '0', '--data-dir', dataDir, '--not-a-flag'], env)
+  let log = ''
+  child.stdout.on('data', chunk => {
+    log += String(chunk)
+  })
+  child.stderr.on('data', chunk => {
+    log += String(chunk)
+  })
+  try {
+    const url = await waitForReady(child)
+    const health = await (await fetch(url + '/tagger/api/health')).json()
+    assert.equal(health.version, pkg.version, 'version 必须来自根 package.json，不许硬编码')
+    // 字段来源要如实：baseUrl / model 来自环境变量，key 谁都没给
+    assert.deepEqual(health.llm.source, { baseUrl: 'env', apiKey: 'none', model: 'env' })
+    assert.equal(health.llmReady, false, '只有地址没有 key，仍然不算就绪')
+  } finally {
+    await stop(child)
+    await rm(dataDir, { recursive: true, force: true })
+  }
+  assert.ok(log.includes('未知参数：--not-a-flag'), '白名单外的参数要告警，不许静默吞掉')
+  const warnAt = log.indexOf('未知参数：')
+  // 告警要在服务就绪前就出现（不是等到退出才补一句）；真 node 下再要求它早于 shutdown 日志
+  assert.ok(warnAt >= 0 && warnAt < log.indexOf('STANDALONE_READY'), '告警要在启动阶段就出现')
+  const shutAt = log.indexOf('关闭服务')
+  if (shutAt >= 0) assert.ok(shutAt > warnAt, '告警要出现在 shutdown 之前')
 })

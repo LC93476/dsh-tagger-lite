@@ -36,6 +36,12 @@ npm link && dsh-tagger --help # 用 bin 名，参数同 bin/tagger.mjs
 
 `--data-dir` 指定 > `DSH_TAGGER_DATA` > `DSH_PROMPT_FORGE_DATA` > `~/.dsh-tagger`（老目录 `~/.dsh-prompt-forge` 有配置就沿用）；`start.cmd` / `start.sh` 默认用仓库下的 `.data`，docker 里是卷 `tagger-data`。运行历史、备份、`settings.json` 都在里面，删掉等于恢复出厂。
 
+## 词表从哪来
+
+大词库（9 万多条 Danbooru 词条）不在本仓库里，启动时按顺序探测：`--dict-dir` > `DSH_DANBOORU_DIR` > `DSH_COMFYUI_DATA_DIR` > `~/.dsh-comfyui-workbench/data{,/danbooru}` > 仓库里打包的快照 `data/danbooru` > 仓库父目录的 `dsh-comfyui-workbench/data{,/danbooru}` > 当前目录的 `dsh-comfyui-workbench/data/danbooru`。
+
+一条都探测不到时只用 `data/tags`（seed + overlay，1247 条）：能跑，但中文别名与冷门词覆盖窄，面板会提示。补全量词表跑 `node scripts/tags/build-tags.mjs --from <danbooru 目录>`，或直接把环境变量指向快照目录。
+
 ## 常见问题
 
 | 症状 | 处理 |

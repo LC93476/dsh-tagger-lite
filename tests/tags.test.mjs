@@ -17,6 +17,8 @@ import { fileURLToPath } from 'node:url'
 import tagsEntry, * as tagsNs from '../lib/tags.js'
 import * as matcherNs from '../lib/tags/matcher.js'
 import { createTagIndex, escapeParens, parseTerm, resetTagIndexCache, unescapeTag } from '../lib/tags.js'
+import { addRecord, isOverlayJsonl, overlaySignature } from '../lib/tags/loader.js'
+import { standardsFor } from '../lib/tags/text.js'
 import { runNormalize, summaryToJson, summaryToText } from '../scripts/tags/build-tags.mjs'
 
 const silent = { info() {}, warn() {}, error() {} }
@@ -33,14 +35,16 @@ after(() => {
 // 这种环境下不该再去探测本机那套 Danbooru 全量库，否则同一份测试在两台机器上行为不同。
 const isolated = String(process.env.DSH_TAGGER_DATA ?? '').trim() !== ''
 
-/** 包内的 data/tags/*.jsonl（overlay 补词表）在本仓里实际有哪几个。 */
+/** 包内的 data/tags/*.jsonl（overlay 补词表）在本仓里实际有哪几个：判定复用加载器的 isOverlayJsonl，
+ *  .example.jsonl 模板不算 overlay，否则「包里有几个文件」与「索引里加载了几个」两边就对不上。 */
 function packageOverlayFiles() {
   const dir = path.join(repoRoot, 'data', 'tags')
   if (!fs.existsSync(dir)) return []
-  return fs.readdirSync(dir).filter(name => name.endsWith('.jsonl')).map(name => path.join(dir, name))
+  return fs.readdirSync(dir).filter(name => isOverlayJsonl(name)).map(name => path.join(dir, name))
 }
 
-// 真实数据索引：默认探测（本机 D:/QUARK/dsh-comfyui-workbench/data/danbooru）。
+// 真实数据索引：默认探测（DSH_DANBOORU_DIR / ~/.dsh-comfyui-workbench / 便携包快照 / 相邻 workbench），
+// 本机没有全量库时 live 只剩 seed + overlay，真实词库用例自己 skip，不影响其它断言。
 const live = createTagIndex({ dir: scratch, logger: silent, probeDefaults: !isolated })
 
 /**
@@ -499,5 +503,83 @@ test('build-tags：runNormalize 报告总条目 / 分类计数 / 重复 tag / �
   assert.equal(parsed.total, summary.total)
   assert.equal(parsed.duplicates.tags, 1)
   assert.ok(summaryToText(summary).includes('缺中文 1 条'))
+})
+
+test('.example.jsonl 只是模板：不加载，改它也不触发热重载', async () => {
+  const dir = fs.mkdtempSync(path.join(scratch, 'example-'))
+  const overlay = path.join(dir, 'tags')
+  fs.mkdirSync(overlay, { recursive: true })
+  const real = path.join(overlay, 'my-words.jsonl')
+  const example = path.join(overlay, 'adult-overlay.example.jsonl')
+  fs.writeFileSync(real, JSON.stringify({ tag: 'zz_example_probe_real', kind: 'general', postCount: 10, cn: '真实词条' }) + '\n', 'utf8')
+  fs.writeFileSync(example, JSON.stringify({ tag: 'zz_example_probe_ghost', kind: 'general', postCount: 99, cn: '模板词条' }) + '\n', 'utf8')
+
+  const idx = createTagIndex({ dir, logger: silent, probeDefaults: false })
+  await idx.ready()
+  assert.equal(idx.canonicalize('zz_example_probe_real').matched, true)
+  assert.equal(idx.canonicalize('zz_example_probe_ghost').matched, false, '模板文件里的词条不该进索引')
+  assert.equal(
+    idx.stats().overlayFiles.some(file => file.includes('.example.jsonl')),
+    false,
+    'overlayFiles 不能把模板文件算进去',
+  )
+
+  const sigBefore = overlaySignature(dir)
+  // 只改模板：签名不该变，ensureFresh 也不该触发重载（mtime 变了，但它不在签名里）
+  fs.writeFileSync(
+    example,
+    [
+      JSON.stringify({ tag: 'zz_example_probe_ghost', kind: 'general', postCount: 99, cn: '模板词条' }),
+      JSON.stringify({ tag: 'zz_example_probe_ghost2', kind: 'general', postCount: 98 }),
+      '',
+    ].join('\n'),
+    'utf8',
+  )
+  assert.equal(overlaySignature(dir), sigBefore, '模板文件不参与签名')
+  assert.equal(await idx.ensureFresh(), false, '只改模板不该触发重载')
+  assert.equal(idx.canonicalize('zz_example_probe_ghost2').matched, false)
+
+  // 改真词表：签名变、热重载触发、新词条立刻可用
+  fs.appendFileSync(real, JSON.stringify({ tag: 'zz_example_probe_two', kind: 'general', postCount: 5 }) + '\n', 'utf8')
+  assert.notEqual(overlaySignature(dir), sigBefore, '真词表变了签名必须变')
+  assert.equal(await idx.ensureFresh(), true)
+  assert.equal(idx.canonicalize('zz_example_probe_two').matched, true)
+})
+
+test('addRecord：类型从 general 升级到画师时格式标准跟着换', () => {
+  const entries = new Map()
+  addRecord(entries, { tag: 'zz_upgrade_probe', kind: 'general', postCount: 10 }, 'general')
+  const entry = entries.get('zz_upgrade_probe')
+  assert.equal(entry.kind, 'general')
+  assert.deepEqual(entry.standards, standardsFor('general'))
+  // 同一个 tag 后面又出现一次，这次标成画师：kind 升级，standards 必须同步收窄
+  addRecord(entries, { tag: 'zz_upgrade_probe', kind: 'artist', postCount: 20 }, undefined)
+  assert.equal(entry.kind, 'artist')
+  assert.deepEqual(entry.standards, ['wd'], '画师只在 WD 体系里稳定存在')
+  assert.equal(entry.postCount, 20, '热度只升不降')
+  // 已经升级过的不许再被 general 记录降回去
+  addRecord(entries, { tag: 'zz_upgrade_probe', kind: 'general', postCount: 30 }, 'general')
+  assert.equal(entry.kind, 'artist')
+  assert.deepEqual(entry.standards, ['wd'])
+  assert.equal(entry.postCount, 30)
+
+  // 一般类升级到角色类：标准与 general 相同，但 kind 要变
+  addRecord(entries, { tag: 'zz_upgrade_probe_char', kind: 'character', postCount: 1 }, 'general')
+  assert.equal(entries.get('zz_upgrade_probe_char').kind, 'character')
+  assert.deepEqual(entries.get('zz_upgrade_probe_char').standards, standardsFor('character'))
+})
+
+test('addRecord：names 与 aliases 并存时两者都进 names', () => {
+  const entries = new Map()
+  addRecord(
+    entries,
+    { tag: 'zz_names_probe', kind: 'general', postCount: 1, names: ['zz甲名'], aliases: ['zz乙别名'], cn: 'zz中文名' },
+    'general',
+  )
+  const entry = entries.get('zz_names_probe')
+  assert.equal(entry.names.includes('zz甲名'), true, 'names 里的名字要收')
+  assert.equal(entry.names.includes('zz乙别名'), true, 'aliases 不能因为 names 存在就被丢掉')
+  assert.equal(entry.names.includes('zz中文名'), true)
+  assert.deepEqual(entry.names, ['zz甲名', 'zz乙别名', 'zz中文名'])
 })
 

@@ -15,7 +15,8 @@
  *   1. 没有内置 key、没有内置地址：缺配置就如实报 llmReady:false，接口回清晰错误。
  *   2. SIGINT / SIGTERM 关服务走 gracefully：不再接新连接，等在飞的请求收尾，超时再来硬的。
  */
-import { readFileSync, statSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
+import { lstat, readFile, realpath } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
@@ -28,6 +29,9 @@ const DEFAULT_PORT = 7789
 const DEFAULT_HOST = '127.0.0.1'
 const DEFAULT_SHUTDOWN_MS = 4000
 const MCP_PATH = PREFIX + '/mcp'
+/** 根目录 package.json：health 的 version 从这里读，不硬编码。 */
+const PACKAGE_FILE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'package.json')
+let cachedVersion = ''
 
 const USAGE = [
   'DSh Tagger 独立服务',
@@ -49,7 +53,7 @@ const USAGE = [
 
 /** 一个非常小的参数解析：够用即可，不引依赖。 */
 function parseArgs(argv) {
-  const out = { help: false }
+  const out = { help: false, unknown: [] }
   const takes = new Set([
     'port',
     'host',
@@ -70,7 +74,11 @@ function parseArgs(argv) {
     const body = token.slice(2)
     const eq = body.indexOf('=')
     const key = eq >= 0 ? body.slice(0, eq) : body
-    if (!takes.has(key)) continue
+    // 白名单外的参数不丢：收起来，启动时告警一条（别静默，也别拒启动）
+    if (!takes.has(key)) {
+      out.unknown.push('--' + key)
+      continue
+    }
     if (eq >= 0) {
       out[key] = body.slice(eq + 1)
       continue
@@ -123,13 +131,25 @@ if (argv.help === true) {
 
 const logger = makeLogger()
 
+// 未知参数：告警但不拦着启动（可能是留给未来版本的开关，用户也可能只是拼错了）。
+if (argv.unknown.length > 0) {
+  logger.warn('未知参数：' + argv.unknown.join(' ') + '（已忽略，不影响启动）')
+}
+
 // dataDir() 读 env，所以在 createRuntime 之前落地：--data-dir 优先级最高。
 const dataDirArg = str(argv['data-dir']).trim()
 if (dataDirArg !== '') process.env.DSH_TAGGER_DATA = dataDirArg
 
-const baseUrl = str(argv['base-url']).trim() || str(process.env.DSH_TAGGER_BASE_URL).trim()
-const apiKey = str(argv['api-key']).trim() || str(process.env.DSH_TAGGER_API_KEY).trim()
-const model = str(argv.model).trim() || str(process.env.DSH_TAGGER_MODEL).trim()
+// 分层记清楚：cli 与 env 各自留原值，health 才能说出某个字段实际来自哪层。
+const cliBaseUrl = str(argv['base-url']).trim()
+const cliApiKey = str(argv['api-key']).trim()
+const cliModel = str(argv.model).trim()
+const envBaseUrl = str(process.env.DSH_TAGGER_BASE_URL).trim()
+const envApiKey = str(process.env.DSH_TAGGER_API_KEY).trim()
+const envModel = str(process.env.DSH_TAGGER_MODEL).trim()
+const baseUrl = cliBaseUrl !== '' ? cliBaseUrl : envBaseUrl
+const apiKey = cliApiKey !== '' ? cliApiKey : envApiKey
+const model = cliModel !== '' ? cliModel : envModel
 const workflowDir = str(argv['workflow-dir']).trim() || str(process.env.DSH_TAGGER_WORKFLOW_DIR).trim()
 const provider = str(argv.provider).trim() || 'openai-compatible'
 const host = str(argv.host).trim() || DEFAULT_HOST
@@ -137,23 +157,56 @@ const port = portOf(argv.port, DEFAULT_PORT)
 
 // CLI / 环境变量没给的，从 settings.json 的 llm.baseUrl / llm.apiKey 现取 —— 面板填完立刻生效，不用重启。
 let runtime
+
+/** 现读一层：CLI > 环境变量 > settings.json（面板改完立刻生效，不用重启）。 */
+function liveLlm() {
+  const live = runtime?.config?.llm ?? {}
+  return {
+    baseUrl: baseUrl !== '' ? baseUrl : str(live.baseUrl),
+    apiKey: apiKey !== '' ? apiKey : str(live.apiKey),
+    model: model !== '' ? model : str(live.model),
+    provider,
+    // 超时也现读：面板把 llm.timeoutMs 调大后立刻生效，不然长提示词还是会按 120s 掐断。
+    timeoutMs: Number(live.timeoutMs) > 0 ? Number(live.timeoutMs) : undefined,
+  }
+}
+
+/** 某个字段到底来自哪一层：cli / env / settings / none。面板改了没生效，通常就是被 env 或 cli 盖住了。 */
+function sourceOf(cliValue, envValue, liveValue) {
+  if (str(cliValue) !== '') return 'cli'
+  if (str(envValue) !== '') return 'env'
+  if (str(liveValue) !== '') return 'settings'
+  return 'none'
+}
+
+function llmSources() {
+  const live = liveLlm()
+  return {
+    baseUrl: sourceOf(cliBaseUrl, envBaseUrl, str(live.baseUrl)),
+    apiKey: sourceOf(cliApiKey, envApiKey, str(live.apiKey)),
+    model: sourceOf(cliModel, envModel, str(live.model)),
+  }
+}
+
+/** 根 package.json 的 version，模块级缓存一次（读不到就 0.0.0，不抛）。 */
+function packageVersion() {
+  if (cachedVersion !== '') return cachedVersion
+  try {
+    const pkg = JSON.parse(readFileSync(PACKAGE_FILE, 'utf8'))
+    cachedVersion = str(pkg.version) === '' ? '0.0.0' : String(pkg.version)
+  } catch {
+    cachedVersion = '0.0.0'
+  }
+  return cachedVersion
+}
+
 const llm = createLlmShim({
   baseUrl,
   apiKey,
   model,
   provider,
   logger,
-  resolve: () => {
-    const live = runtime?.config?.llm ?? {}
-    return {
-      baseUrl: baseUrl !== '' ? baseUrl : str(live.baseUrl),
-      apiKey: apiKey !== '' ? apiKey : str(live.apiKey),
-      model: model !== '' ? model : str(live.model),
-      provider,
-      // 超时也现读：面板把 llm.timeoutMs 调大后立刻生效，不然长提示词还是会按 120s 掐断。
-      timeoutMs: Number(live.timeoutMs) > 0 ? Number(live.timeoutMs) : undefined,
-    }
-  },
+  resolve: liveLlm,
 })
 const webServer = createWebServerShim({ host, port, logger })
 const ctx = createContext({ llm, webServer })
@@ -175,11 +228,24 @@ if (rt !== undefined && rt.mcp !== undefined && typeof rt.mcp.attach === 'functi
 }
 
 function describeHealth() {
-  const llmInfo = typeof llm.describe === 'function' ? llm.describe() : { configured: llm.configured }
+  // 两条分支的键必须完全一致：/health 的消费者（htmlShell、启动日志、测试）会直接读 model / endpoint，
+  // 联合类型里少一个键就取不到值（tsc 也会报 TS2339）。describe() 永远存在，这里只是兜底。
+  const llmInfo = typeof llm.describe === 'function'
+    ? llm.describe()
+    : {
+        kind: 'shim',
+        configured: llm.configured === true,
+        provider: str(llm.provider),
+        model: str(llm.model),
+        endpoint: str(llm.endpoint),
+        baseUrl: str(llm.baseUrl),
+        timeoutMs: llm.timeoutMs,
+        hint: undefined,
+      }
   const address = webServer.address()
   return {
     plugin: 'dsh-tagger',
-    version: '0.2.0',
+    version: packageVersion(),
     mode: 'standalone',
     dataDir: rt.dir,
     host: address.host,
@@ -187,7 +253,7 @@ function describeHealth() {
     basePath: PREFIX,
     mcp: { endpoint: MCP_PATH, protocol: rt.mcp === undefined ? undefined : rt.mcp.protocolVersion },
     llmReady: llmInfo.configured === true,
-    llm: llmInfo,
+    llm: { ...llmInfo, source: llmSources() },
     refineModes: Array.isArray(rt.refine?.modes) ? rt.refine.modes : ['add', 'edit', 'prune', 'weights'],
     comfy: {
       baseUrl: rt.config?.comfy?.baseUrl,
@@ -304,6 +370,18 @@ const SELF_DIR = path.dirname(fileURLToPath(import.meta.url))
 const PANEL_FILE = path.join(SELF_DIR, 'panel.html')
 // 面板拆出来的静态资源（样式 / 脚本）：只从这里读，别的目录一律不认。
 const PUBLIC_DIR = path.resolve(SELF_DIR, 'public')
+// public 的真实路径（解软链后），第一次用到时算一次；算不出来就退回落差
+let realPublicDir = ''
+
+async function publicRealDir() {
+  if (realPublicDir !== '') return realPublicDir
+  try {
+    realPublicDir = await realpath(PUBLIC_DIR)
+  } catch {
+    realPublicDir = PUBLIC_DIR
+  }
+  return realPublicDir
+}
 // 只放行面板真正用到的这几种类型；未知扩展名当 404，不猜。
 const PUBLIC_MIME = new Map([
   ['.css', 'text/css; charset=utf-8'],
@@ -322,9 +400,9 @@ const PUBLIC_MIME = new Map([
  * 三重防线，任何一条不过就返回 error，绝不把盘上别的东西吐出去：
  *   1. 解码后不允许出现 '..' 段或空段（'//' 这类）；
  *   2. path.resolve 之后必须仍在 PUBLIC_DIR 里面（挡住 '..\' 这种 Windows 分隔符绕过）；
- *   3. statSync 必须是普通文件（目录、符号链接到别处都不算）。
+ *   3. lstat 必须是普通文件（目录不算），且不能是软链；再拿 realpath 复核一遍真实位置。
  */
-function resolvePublicPath(rawUrl) {
+async function resolvePublicPath(rawUrl) {
   const text = str(rawUrl) || '/'
   const cut = text.search(/[?#]/)
   const rawPath = cut >= 0 ? text.slice(0, cut) : text
@@ -345,13 +423,24 @@ function resolvePublicPath(rawUrl) {
   if (!full.startsWith(PUBLIC_DIR + path.sep)) return { error: 'bad-path' }
   const type = PUBLIC_MIME.get(path.extname(full).toLowerCase())
   if (type === undefined) return { error: 'not-found' }
+  // lstat 不跟随软链：指向 public 外面的软链（哪怕它指向一个普通文件）一律当没有。
   let stat
   try {
-    stat = statSync(full)
+    stat = await lstat(full)
   } catch {
     return { error: 'not-found' }
   }
+  if (stat.isSymbolicLink() === true) return { error: 'not-found' }
   if (stat.isFile() !== true) return { error: 'not-found' }
+  // 双保险：把真路径解出来，仍然必须落在 public 的真实目录里（父目录被换成软链也能挡住）。
+  const realDir = await publicRealDir()
+  let real
+  try {
+    real = await realpath(full)
+  } catch {
+    return { error: 'not-found' }
+  }
+  if (realDir === '' || real.startsWith(realDir + path.sep) !== true) return { error: 'not-found' }
   return { file: full, type, size: stat.size, mtimeMs: stat.mtimeMs }
 }
 
@@ -364,13 +453,35 @@ function resolvePublicPath(rawUrl) {
  * 文件变了 size/mtime 跟着变，ETag 自然失效，浏览器拿到新内容。
  * 坏路径 400，找不到 404，其余方式 405。
  */
+/** 弱 ETag 比对：'W/' 前缀只表示强弱，比对时先剥掉。 */
+function normalizeEtag(value) {
+  const text = str(value).trim()
+  return text.startsWith('W/') ? text.slice(2) : text
+}
+
+/**
+ * If-None-Match 比对（纯函数，便于单测）。
+ * 支持：逗号分隔多值、弱校验（W/ 前缀）、以及通配 "*"。
+ */
+function etagMatches(header, etag) {
+  const target = normalizeEtag(etag)
+  if (target === '') return false
+  for (const part of str(header).split(',')) {
+    const token = part.trim()
+    if (token === '') continue
+    if (token === '*') return true
+    if (normalizeEtag(token) === target) return true
+  }
+  return false
+}
+
 async function servePublic(req, res) {
   if (req.method !== 'GET' && req.method !== 'HEAD') {
     res.writeHead(405, { 'Content-Type': 'application/json; charset=utf-8', Allow: 'GET, HEAD' })
     res.end(JSON.stringify({ ok: false, error: 'method-not-allowed', message: '/public/* 只支持 GET。' }))
     return
   }
-  const found = resolvePublicPath(req.url)
+  const found = await resolvePublicPath(req.url)
   if (found.error !== undefined) {
     const status = found.error === 'bad-path' ? 400 : 404
     res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' })
@@ -385,14 +496,14 @@ async function servePublic(req, res) {
   }
   let body
   try {
-    body = readFileSync(found.file)
+    body = await readFile(found.file)
   } catch (error) {
     res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' })
     res.end(JSON.stringify({ ok: false, error: 'not-found', message: msgOfStatic(error) }))
     return
   }
   const etag = '"' + found.size.toString(16) + '-' + Math.round(found.mtimeMs).toString(16) + '"'
-  if (str(req.headers['if-none-match']) === etag) {
+  if (etagMatches(req.headers['if-none-match'], etag) === true) {
     res.writeHead(304, { ETag: etag, 'Cache-Control': 'no-cache' })
     res.end()
     return
@@ -487,8 +598,11 @@ for (const signal of ['SIGINT', 'SIGTERM']) {
     shutdown(signal, 0)
   })
 }
-process.on('uncaughtException', error => {
+// 未捕获异常不再让进程带伤继续对外服务：打日志 → 走同一条优雅退出路径 → 退码 1。
+// shutdown 自带幂等（shuttingDown 闸）与 4s 兜底强退，和定时器 / 游标清理不冲突。
+process.on('uncaughtException', async error => {
   logger.error('未捕获异常：' + (error instanceof Error ? String(error.stack ?? error.message) : String(error)))
+  await shutdown('uncaughtException', 1)
 })
 process.on('unhandledRejection', reason => {
   logger.error('未处理的 Promise 拒绝：' + (reason instanceof Error ? reason.message : String(reason)))

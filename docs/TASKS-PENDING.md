@@ -11,7 +11,7 @@
 EXE="C:/Users/<你的用户名>/AppData/Local/Programs/DeepSeek Harness/DeepSeek Harness.exe"
 cd "/d/DSh tagger-lite"
 ELECTRON_RUN_AS_NODE=1 "$EXE" scripts/tags/check-tags.mjs           # 511 行 / 4 文件，结构自检通过
-ELECTRON_RUN_AS_NODE=1 "$EXE" scripts/check-overlay-tags.mjs   # 1247 行 / 1247 tag，✓ 体检通过
+ELECTRON_RUN_AS_NODE=1 "$EXE" scripts/tags/check-overlay-tags.mjs --strict-dict   # 1247 行 / 1247 tag，✓ 通过 + strict 提示
 ELECTRON_RUN_AS_NODE=1 "$EXE" --test --test-concurrency=1 tests/*.test.mjs   # 265 tests / 264 pass / 1 skipped
 ```
 
@@ -55,12 +55,33 @@ for (const name of names) if (!entry.names.includes(name)) entry.names.push(name
 - 因此去重一律删「靠后那份」的行，删之前把它独有的 aliases 并进保留行 —— 并集不会自动继承，删了就丢。
 - 所有权：四个主文件拥有词条；`seed-*` 只留主文件没有的词。seed 与主词表重复是纯噪音（不会覆盖中文），但也别留。
 
-## 两个已知取舍（不是 bug，别当 bug 修）
+## 两个已知取舍（不是 bug，别当 bug 修；strict 会把它们列成提示）
 
 2. **`lib/postprocess/rules.js` 的表里一个幽灵词都不许留**：`silver_hair` / `bangs` / `room` / `rim_light` / `cinematic_lighting` / `soft_lighting` / `dramatic_lighting` / `volumetric_lighting` 都已删掉，换成库内真词（`grey_hair` / `blunt_bangs` / `sidelighting` / `underlighting` / `dim_lighting` / `light_particles` / `ring_light` / `spotlight` / `candlelight`）。`tests/postprocess.test.mjs` 的「幽灵词」断言就是防这个 —— 加键前先 `canonicalize` 一下。
 
-## 剩余可选工作（想做再做）
+## strict 口径：`--strict-dict`（task-47 已实现）
 
-- `scripts/check-overlay-tags.mjs` 的「不在库」是拿**含 overlay 的索引**比对，所以 overlay 自创词条永远算「在库」。要更严可以再加一个 `--strict-dict`：只对主词表快照（`discoverDataDir()`）比对，把靠 overlay 自引用存活的词条列成警告。
-- 词表行数还可以继续加（主词表快照 99447 条里，overlay 只覆盖了很小一部分）。取材用 `scripts/suggest-overlay.mjs --group <Posture|Image composition|Attire|Face tags|Hair styles|…> --min-count N`。
+默认的「不在库」是拿**含 overlay 的索引**比对，所以 overlay 自己写进去的词条永远算「在库」（自引用存活）。
+`--strict-dict` 再建一份**不叠 overlay、不装 seed** 的纯主词表索引（`loadTagEntries({ overlay: false, includeSeed: false })`），把「只在 overlay 里有、主词表快照里没有」的词条列出来：
+
+```bash
+ELECTRON_RUN_AS_NODE=1 "$EXE" scripts/tags/check-overlay-tags.mjs --strict-dict            # 默认探测主词表
+ELECTRON_RUN_AS_NODE=1 "$EXE" scripts/tags/check-overlay-tags.mjs --strict-dict --dict-dir "D:/QUARK/dsh-comfyui-workbench/data/danbooru"
+```
+
+- 输出一行统计：`strict：主词表 N 条（<目录>），M 条仅存在于 overlay（只提示，不影响退出码）`；
+- **只提示、不改退出码**：这些词在当前机器上锻造时仍然可用（overlay 会并进去），但换台机器 / 删掉 overlay 就没了；
+- 主词表一条都没探测到时（本机没装 danbooru 快照）不刷全量噪音，直接说「无法判定」并给出待比对条数，用 `--dict-dir` 或 `DSH_DANBOORU_DIR` 指路；
+- `--dict-dir` 指定时**只看这个目录**（关掉默认探测与环境变量），所以换机、设没设 `DSH_DANBOORU_DIR` 都得到同一份结果 —— 测试就是靠这个保持与环境无关；
+
+## 口径：私有仓 vs lite 公开包
+
+上面那句「一个词表行从 198 涨到 1247」是**私有仓（本仓）口径**：
+
+- `data/tags/general-nsfw.jsonl`（154 行）是**可选的私有 overlay**，随本仓一起走，不进公开仓；
+- 公开仓（lite）只带模板 `data/tags/adult-overlay.example.jsonl`，用户自己按需改名启用；
+- 所以 `check-tags` 的「511 行 / 4 文件」、`check-overlay-tags` 的「1247 行」在 lite 上都会更少（只剩 seed 与模板外的公共词表），**lite 上这些数字偏小是正常的，不是缺文件**。
+
+## 剩余可选工作（想做再做）
+- 词表行数还可以继续加（主词表快照 99447 条里，overlay 只覆盖了很小一部分）。取材用 `scripts/tags/suggest-overlay.mjs --group <Posture|Image composition|Attire|Face tags|Hair styles|…> --min-count N`。
 - `docs/PERF.md` 的基准还没跑在「词表 1247 行」上：`scripts/dev/bench.mjs` 可以重跑一次看检索是否变慢（索引 99447 条，预计与之前同量级）。
