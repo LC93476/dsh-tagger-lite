@@ -49,6 +49,8 @@ async function bootInner() {
   fillSettings(s.config);
   syncRefRow();
   loadUi();
+  // 模型档案清单也走 boot 这一次：接口缺席就只留空下拉，不阻塞后面
+  await loadProfiles();
   await refreshLlmPillFromHealth();
 }
 /** 本地三道处理的开关：只有服务端明确关了才不打勾，缺字段按开。 */
@@ -286,6 +288,8 @@ $("refine-text").addEventListener("keydown", function (e) {
   if (e.isComposing || e.keyCode === 229) return;
   if (e.key === "Enter") doRefine();
 });
+// 切档案就是改配置：质量词与词序规则由服务端按档案套用（改下拉即生效）
+if ($("model-profile")) $("model-profile").addEventListener("change", changeProfile);
 /** 换语言：只换字典与看得见的文案，服务状态沿用最近一次探测的结果（不重跑 boot、不丢表单）。 */
 function relocalize() {
   document.documentElement.lang = typeof i18nLang === "function" ? i18nLang() : "zh";
@@ -296,6 +300,7 @@ function relocalize() {
   fillWorkflows(state.workflows, $("workflow").value || "");
   renderPoseSets();
   syncPoseBtn();
+  renderProfileStatus(state.profile);
   if (state.result) renderResult();
 }
 if ($("lang")) {

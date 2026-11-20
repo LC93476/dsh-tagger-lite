@@ -17,6 +17,7 @@ import { mkdtemp, rm, symlink, unlink, writeFile } from 'node:fs/promises'
 import { readFileSync, statSync, utimesSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
+import vm from 'node:vm'
 import { fileURLToPath } from 'node:url'
 import { DEFAULTS } from '../lib/config.js'
 
@@ -327,6 +328,27 @@ test('standalone：health / spi / spi.version / 根路径 HTML 都能对外提�
     assert.ok(panel.includes('<select id="lang"'), '面板要有语言选择')
     assert.ok(appJs.includes('i18nSetLang'), '换语言要真的切字典并重渲染')
 
+    // 模型档案（质量词 / 词序）：面板要有下拉与说明行，脚本要真去取清单并落配置，文案全走 ui.profile.*
+    assert.ok(panel.includes('<select id="model-profile"'), '面板要有模型档案下拉')
+    assert.ok(panel.includes('id="profile-status"'), '档案说明行要有落脚点')
+    assert.ok(panel.includes('id="level"'), '破甲档下拉不许被档案块挤掉')
+    assert.ok(settingsJs.includes('function fillProfiles('), '档案下拉由 settings.js 填')
+    assert.ok(settingsJs.includes('async function loadProfiles('), '要能取 GET /profiles')
+    assert.ok(settingsJs.includes('async function changeProfile('), '切档要真的写配置')
+    assert.ok(settingsJs.includes('function renderProfileStatus('), '生效值说明要能重画')
+    assert.ok(settingsJs.includes('function mergeProfileState('), '服务端只回 id 时要能补齐质量词')
+    assert.ok(appJs.includes('await loadProfiles()'), 'boot 要拉一次档案清单')
+    assert.ok(appJs.includes('"model-profile"') && appJs.includes('changeProfile'), '下拉 change 要绑到 changeProfile')
+    assert.ok(appJs.indexOf('await loadProfiles()') > appJs.indexOf('fillSettings(s.config)'), '档案清单要在配置回填之后拉（切档才算得出说明）')
+    assert.ok(i18nJs.includes('"sel": "#model-profile"'), '档案标签要跟着语言走')
+    for (const key of ['ui.profile.label', 'ui.profile.saved', 'ui.profile.failed', 'ui.profile.none', 'ui.profile.orderOn', 'ui.profile.orderOff', 'ui.profile.custom', 'ui.profile.quality']) {
+      assert.equal(Object.prototype.hasOwnProperty.call(zhDict, key), true, key + ' 要在 locale/zh.json 里')
+      assert.equal(Object.prototype.hasOwnProperty.call(enDict, key), true, key + ' 要在 locale/en.json 里')
+    }
+    // 内置字典是 /locale 缺席时的兜底：新键也得在，否则离线时说明行变裸键
+    assert.ok(i18nJs.includes('"ui.profile.saved"'), '内置 zh 字典也要有 ui.profile.saved')
+    assert.ok(Buffer.byteLength(panel) < 10240, '加了档案块，panel.html 仍然只留骨架')
+
     // GET /locale 由主服务提供，形状固定；前端在它缺席时降级到内置 zh（i18n.js 的 I18N_BUILTIN_ZH）
     const localeRes = await fetch(url + '/tagger/api/locale?lang=zh')
     assert.equal(localeRes.status, 200, '/locale 要由 /tagger/api 主线提供')
@@ -621,4 +643,129 @@ test('standalone：未知参数告警不拦启动，health.version 跟 package.j
   assert.ok(warnAt >= 0 && warnAt < log.indexOf('STANDALONE_READY'), '告警要在启动阶段就出现')
   const shutAt = log.indexOf('关闭服务')
   if (shutAt >= 0) assert.ok(shutAt > warnAt, '告警要出现在 shutdown 之前')
+})
+
+test('面板：模型档案下拉（#model-profile）取清单、说明生效值、切档落 config', async () => {
+  const root = path.join(here, '..')
+  const zhDict = JSON.parse(readFileSync(path.join(root, 'locale', 'zh.json'), 'utf8'))
+  const source = readFileSync(path.join(root, 'server', 'public', 'settings.js'), 'utf8')
+  /** 假 select：只要 option 列表 / value / disabled 三样，够覆盖下拉逻辑。 */
+  const makeSelect = () => ({
+    id: 'model-profile',
+    value: '',
+    disabled: false,
+    children: [],
+    set innerHTML(v) { if (v === '') this.children = [] },
+    get innerHTML() { return '' },
+    appendChild(node) { this.children.push(node) },
+  })
+  const select = makeSelect()
+  const statusSpan = { id: 'profile-status', className: 'hint', textContent: '' }
+  const els = { 'model-profile': select, 'profile-status': statusSpan }
+  const calls = []
+  const statuses = []
+  const sandbox = {
+    state: {},
+    document: { createElement: tag => ({ tagName: tag, value: '', textContent: '' }) },
+    $: id => els[id] ?? null,
+    // 真字典渲染：{name} 占位替换，断言看到的就是用户看到的那句话
+    T: (key, vars) => {
+      assert.equal(typeof zhDict[key], 'string', key + ' 要在 locale/zh.json 里')
+      const text = zhDict[key]
+      if (typeof vars !== 'object' || vars === null) return text
+      return text.replace(/\{(\w+)\}/g, (whole, name) => (name in vars ? String(vars[name]) : whole))
+    },
+    api: async (p, init) => { calls.push({ path: p, init }); return sandbox.__next },
+    errText: () => 'E',
+    setStatus: (id, text, bad) => statuses.push({ id, text, bad }),
+    fillSettings: config => statuses.push({ id: 'fillSettings', config }),
+  }
+  sandbox.__next = { status: 200, data: { ok: true } }
+  vm.runInNewContext(source, sandbox)
+
+  const list = [
+    { id: 'tag', title: 'Tag', quality: true, qualityTags: ['masterpiece', 'best_quality', 'highres'], order: true },
+    { id: 'pony', title: 'Pony', quality: true, qualityTags: ['score_9', 'score_8_up'], order: true },
+    { id: 'natural', title: 'Natural', quality: false, qualityTags: [], order: false },
+    { id: 'custom', title: 'Custom', quality: null, qualityTags: null, order: null },
+  ]
+
+  // ① 填下拉：顺序照服务端，当前档选中；空清单时不许把下拉清成空白
+  sandbox.fillProfiles(list, { id: 'pony' })
+  assert.deepEqual(select.children.map(o => o.value), ['tag', 'pony', 'natural', 'custom'])
+  assert.deepEqual(select.children.map(o => o.textContent), ['Tag', 'Pony', 'Natural', 'Custom'])
+  assert.equal(select.value, 'pony', '当前档要选中')
+  sandbox.fillProfiles([], { id: 'tag' })
+  assert.equal(select.children.length, 0, '清单为空时下拉留空，别崩')
+  sandbox.fillProfiles(list, { id: 'nope' })
+  assert.deepEqual(select.children.map(o => o.value), ['tag', 'pony', 'natural', 'custom'], '不存在的当前档不能把列表清空')
+
+  // ② 说明行：只回 id 时用清单补齐质量词；natural 明确「不补质量词」；词序按档给话
+  select.value = 'pony'
+  const ponyText = sandbox.renderProfileStatus({ id: 'pony' })
+  assert.ok(ponyText.includes('score_9'), '生效质量词要露出来：' + ponyText)
+  assert.ok(ponyText.includes(zhDict['ui.profile.orderOn']), 'pony 要按分段重排')
+  assert.equal(statusSpan.textContent, ponyText, '说明行要真的写进 #profile-status')
+  assert.deepEqual(sandbox.state.profile, { id: 'pony' }, '生效值要记在 state.profile 上（换语言时重画用）')
+  const naturalText = sandbox.renderProfileStatus({ id: 'natural' })
+  assert.ok(naturalText.includes(zhDict['ui.profile.none']), 'natural 不补质量词：' + naturalText)
+  assert.ok(naturalText.includes(zhDict['ui.profile.orderOff']), 'natural 保留模型顺序')
+  assert.equal(naturalText.includes(zhDict['ui.profile.custom']), false, '非自定义档不点配置')
+  const customText = sandbox.renderProfileStatus({ id: 'custom' })
+  assert.ok(customText.includes(zhDict['ui.profile.custom']), '自定义档要提示读配置')
+  // 服务端给了完整字段时以服务端为准（不被清单覆盖）
+  const fromServer = sandbox.renderProfileStatus({ id: 'pony', quality: true, qualityTags: ['score_9'], order: false })
+  assert.ok(fromServer.includes(zhDict['ui.profile.orderOff']), '服务端说 order=false 就按 false 显示')
+  assert.ok(fromServer.includes('score_9'), '服务端给了质量词就用它：' + fromServer)
+  assert.equal(fromServer.includes('score_8_up'), false, '服务端给了完整字段就不许再拿清单的拼进来')
+
+  // ③ GET /profiles：一次拿清单 + 当前档，失败静默（不抛、不把面板搞挂）
+  select.children = []
+  sandbox.__next = { status: 200, data: { ok: true, profiles: list, current: { id: 'natural' } } }
+  await sandbox.loadProfiles()
+  assert.equal(calls[0].path, '/profiles')
+  assert.deepEqual(select.children.map(o => o.value), ['tag', 'pony', 'natural', 'custom'])
+  assert.equal(select.value, 'natural', '当前档要选中')
+  assert.ok(statusSpan.textContent.includes(zhDict['ui.profile.none']), '说明行跟着当前档')
+  const beforeFail = calls.length
+  sandbox.__next = { status: 500, data: { ok: false, error: 'internal' } }
+  await sandbox.loadProfiles()
+  assert.equal(calls.length, beforeFail + 1)
+  assert.equal(select.value, 'natural', '取清单失败不许动当前选择')
+  // 宿主只回 config 里的 profile id（没有清单）时，也要把当前档显示出来
+  sandbox.__next = { status: 200, data: { ok: true, profile: 'pony' } }
+  await sandbox.loadProfiles()
+  assert.deepEqual(select.children.map(o => o.value), ['pony'], '没有清单就退回当前档')
+  assert.equal(select.value, 'pony')
+
+  // ④ 切档：POST /config 只带 forge.profile；成功按服务端回的生效值刷新，失败红字且放开下拉
+  // （先把完整清单装回去：上一段只回 profile id 的兜底会把清单换成一条占位）
+  sandbox.fillProfiles(list, { id: 'pony' })
+  select.value = 'pony'
+  // /config 的真实回包只有 { ok, config }（没有生效值），说明行得靠清单补齐
+  sandbox.__next = { status: 200, data: { ok: true, config: { forge: { profile: 'pony' } } } }
+  await sandbox.changeProfile()
+  const post = calls[calls.length - 1]
+  assert.equal(post.path, '/config')
+  assert.equal(post.init.method, 'POST')
+  assert.deepEqual(JSON.parse(post.init.body), { patch: { forge: { profile: 'pony' } } }, '只改 forge.profile，别顺手整份写回')
+  assert.ok(statusSpan.textContent.startsWith(zhDict['ui.profile.saved']), '成功要写「已保存」：' + statusSpan.textContent)
+  assert.ok(statusSpan.textContent.includes('score_9'), '保存后说明行按新档重画')
+  assert.ok(statuses.some(s => s.id === 'fillSettings' && s.config && s.config.forge), '配置回包要回填表单')
+  assert.equal(select.disabled, false, '成功也要把下拉放开')
+
+  select.value = 'natural'
+  sandbox.__next = { status: 502, data: { ok: false, message: 'boom' } }
+  await sandbox.changeProfile()
+  const last = statuses[statuses.length - 1]
+  assert.equal(last.id, 'profile-status')
+  assert.equal(last.bad, true, '切档失败要红字')
+  assert.ok(String(last.text).startsWith(zhDict['ui.profile.failed'].replace('{text}', '')), '失败文案：' + last.text)
+  assert.equal(select.disabled, false, '失败后下拉必须放开，否则用户再也切不回来')
+
+  // ⑤ 下拉被禁用时重复触发不重发请求（连点/按住不回滚配置）
+  select.disabled = true
+  const beforeBusy = calls.length
+  await sandbox.changeProfile()
+  assert.equal(calls.length, beforeBusy, '下拉禁用期间不重复提交')
 })

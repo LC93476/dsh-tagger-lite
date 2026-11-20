@@ -313,5 +313,13 @@
   "err.max-tokens": "Model output was truncated (the server retried with a doubled cap — raise the limit if it persists)",
   "err.method-not-allowed": "This endpoint does not accept that method",
   "err.internal": "Server internal error — check the server console",
-  "ui.error.response": "Response is not JSON (HTTP {status})"
+  "ui.error.response": "Response is not JSON (HTTP {status})",
+  "ui.profile.label": "Model profile (quality tags / order)",
+  "ui.profile.saved": "Saved",
+  "ui.profile.failed": "Could not switch profile: {text}",
+  "ui.profile.none": "No quality tags",
+  "ui.profile.orderOn": "Order: sorted by section",
+  "ui.profile.orderOff": "Order: model order kept",
+  "ui.profile.custom": "Custom: quality tags and switches come from config",
+  "ui.profile.quality": "Quality tags:"
 }

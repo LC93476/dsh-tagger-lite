@@ -249,3 +249,111 @@ async function doWorkflowImport() {
   wfSetStatus(n > 0 ? T("ui.wfImport.ok", { id: d.id, title: d.title, n: n }) : T("ui.wfImport.okNoVars", { id: d.id, title: d.title }), false);
   saveUi();
 }
+
+// ── 模型档案（tag / pony / natural / custom）──────────────────────────────────
+// 档案决定「要不要补质量词、词序按不按 14 段重排」，落盘键是 config.forge.profile；
+// 规则本身在 lib/model-profiles.js，面板只管选档与说明生效值。
+var PROFILE_LIST = [];
+
+/** 档案下拉：照服务端给的顺序建 option 并选中当前档；标题取服务端 title，缺了退回 id。 */
+function fillProfiles(list, current) {
+  PROFILE_LIST = Array.isArray(list)
+    ? list.filter(function (p) { return p && typeof p.id === "string" && p.id !== "" })
+    : [];
+  var sel = $("model-profile");
+  if (!sel) return;
+  sel.innerHTML = "";
+  PROFILE_LIST.forEach(function (p) {
+    var o = document.createElement("option");
+    o.value = p.id;
+    o.textContent = typeof p.title === "string" && p.title !== "" ? p.title : p.id;
+    sel.appendChild(o);
+  });
+  var want = current && typeof current.id === "string" ? current.id : "";
+  if (want !== "" && PROFILE_LIST.some(function (p) { return p.id === want; })) sel.value = want;
+}
+
+/** 服务端可能只回 id：用清单里同一档补齐质量词与词序，说明行才不会空着。 */
+function mergeProfileState(st) {
+  var raw = st && typeof st === "object" ? st : {};
+  var id = typeof raw.id === "string" && raw.id !== "" ? raw.id : "tag";
+  var hit = null;
+  PROFILE_LIST.forEach(function (p) { if (p.id === id) hit = p; });
+  var tags = Array.isArray(raw.qualityTags) ? raw.qualityTags : [];
+  if (tags.length === 0 && hit && Array.isArray(hit.qualityTags)) tags = hit.qualityTags;
+  var quality = typeof raw.quality === "boolean" ? raw.quality : Boolean(hit && hit.quality === true);
+  var order = typeof raw.order === "boolean" ? raw.order : Boolean(hit === null || hit.order !== false);
+  return { id: id, quality: quality, qualityTags: tags, order: order };
+}
+
+/** 说明行正文：补哪些质量词 + 词序怎么走；自定义档再点一句「读配置」。 */
+function profileStatusText(st) {
+  var p = mergeProfileState(st);
+  var parts = [];
+  parts.push(p.quality && p.qualityTags.length > 0 ? T("ui.profile.quality") + p.qualityTags.join(", ") : T("ui.profile.none"));
+  parts.push(p.order ? T("ui.profile.orderOn") : T("ui.profile.orderOff"));
+  if (p.id === "custom") parts.push(T("ui.profile.custom"));
+  return parts.join(T("ui.common.listSep"));
+}
+
+/** 写说明行（顺手记下生效值，换语言重渲染时要用）；extra 用来在前面挂「已保存 / 正在保存」。 */
+function renderProfileStatus(st, extra) {
+  state.profile = st && typeof st === "object" ? st : null;
+  var text = profileStatusText(state.profile);
+  var el = $("profile-status");
+  if (!el) return text;
+  el.className = "hint";
+  el.textContent = extra ? extra + T("ui.common.listSep") + text : text;
+  return text;
+}
+
+/** GET /profiles：清单与当前生效值一起拿；接口没有或形状奇怪都不致命，面板别处照常用。 */
+async function loadProfiles() {
+  var res = await api("/profiles");
+  var d = res.data || {};
+  if (d.ok === false) return;
+  var list = Array.isArray(d.profiles) ? d.profiles : [];
+  if (list.length === 0 && Array.isArray(d.list)) list = d.list;
+  var current = null;
+  if (d.current && typeof d.current === "object") current = d.current;
+  if (current === null && d.state && typeof d.state === "object") current = d.state;
+  if (current === null && typeof d.profile === "string" && d.profile !== "") current = { id: d.profile };
+  if (list.length === 0) {
+    // 没有清单时至少把当前档显示出来，别留一个空白下拉
+    if (current === null) return;
+    fillProfiles([current], current);
+    renderProfileStatus(current, "");
+    return;
+  }
+  fillProfiles(list, current);
+  renderProfileStatus(current, "");
+}
+
+/** 切档：落 config（forge.profile），成功后按服务端回的生效值刷新说明行；失败红字提示。 */
+async function changeProfile() {
+  var sel = $("model-profile");
+  if (!sel) return;
+  if (sel.disabled) return;
+  var id = String(sel.value || "").trim();
+  if (id === "") return;
+  sel.disabled = true;
+  try {
+    renderProfileStatus(state.profile, T("ui.common.saving"));
+    var res = await api("/config", { method: "POST", body: JSON.stringify({ patch: { forge: { profile: id } } }) });
+    var d = res.data || {};
+    if (d.ok === false) {
+      setStatus("profile-status", T("ui.profile.failed", { text: errText(d, res.status) }), true);
+      return;
+    }
+    if (d.config) fillSettings(d.config);
+    var cur = null;
+    if (d.profile && typeof d.profile === "object") cur = d.profile;
+    if (cur === null && d.current && typeof d.current === "object") cur = d.current;
+    if (cur === null && d.state && typeof d.state === "object") cur = d.state;
+    if (cur === null) cur = { id: id };
+    renderProfileStatus(cur, T("ui.profile.saved"));
+  } finally {
+    sel.disabled = false;
+  }
+}
+

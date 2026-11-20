@@ -115,10 +115,12 @@ comfy / forge / mcp 三个模块共用这一层；新增一个后端时必须复
 | `tags.weightSyntax` | `comfy` | `comfy`(`(tag:1.2)`) / `a1111` / `plain` |
 | `tags.chineseAlias` | `true` | 中文别名参与匹配 |
 | `tags.dataDirs` | `[]` | 真词表目录（Danbooru 的 `*.jsonl`），最多 8 个；空数组 = 走内置探测（`DSH_DANBOORU_DIR` → `~/.dsh-comfyui-workbench/data/danbooru` → **仓库的 `data/danbooru`** → …）。仓库那份由 `scripts/tags/import-dict.mjs` 导入；全都探测不到时只剩 seed + overlay 1247 条，forge 会把常见词判成「不在库里」 |
-| `tags.qualityTags` | `["masterpiece","best_quality","highres"]` | 自动加在正向串首的质量词；置空数组 = 不加 |
+| `tags.qualityTags` | `["masterpiece","best_quality","highres"]` | 自动加在正向串首的质量词；置空数组 = 不加。**`forge.profile` 不是 `custom` 时这一项由档案决定**，手改会被覆盖（面板显示的是生效值）；要自己填就切 `custom` |
 | `forge.repair` / `forge.postprocess` / `forge.poseHints` / `forge.candidates` | 全 `true` | 三道本地处理与候选注入的开关 |
 | `forge.candidateLimit` | `18` | 注入给模型的词库候选条数 |
-| `forge.quality` | `true` | 质量词置顶与真评分词保留；`false` = 回到「评分词一条都不留、交给 ComfyUI 工作流内置」 |
+| `forge.quality` | `true` | 质量词置顶与真评分词保留；`false` = 回到「评分词一条都不留、交给 ComfyUI 工作流内置」；**`profile` 不是 `custom` 时由档案接管** |
+| `forge.profile` | `tag` | 模型档案：`tag`（Danbooru tag 系）/ `pony`（Pony 系）/ `natural`（自然语言系）/ `custom`（自己填）。前三档一并接管 `forge.quality`、`forge.order` 与 `tags.qualityTags`，四档差异见 §6 |
+| `forge.order` | `true` | 是否按 14 段重排词序；**只有 `profile=custom` 时这一项才生效**，前三档由档案给定（`natural` 档恒为 `false`，保留模型给的短语顺序） |
 | `refine.mode` | `add` | `add` / `edit` / `prune` / `weights` |
 | `refine.maxNewTags` / `refine.temperature` / `refine.maxTokens` / `refine.timeoutMs` / `refine.keepOrder` | `12` / `0.4` / `3000` / `120000` / `true` | 精修预算与顺序策略 |
 | `comfy.baseUrl` | `http://127.0.0.1:8188` | ComfyUI 地址 |
@@ -204,6 +206,38 @@ export function createForge({ config, llm, tags, logger, spi }) -> {
 调模型：`llm.stream({ provider, model, messages, ... })` 产出 `{type:"text-delta",text}` /
 `{type:"reasoning-delta"}` / `{type:"finish",kind:"stop"|"error"|"aborted",failure?}`；
 必须带 `AbortController` 与 `config.llm.timeoutMs`；llm 缺席返回 `{ ok:false, error:"no-llm" }`。
+
+### 模型档案（`lib/model-profiles.js`）
+
+一个 `forge.profile` 管三件事：串首要放什么质量词、要不要自动补质量词、要不要按 14 段重排词序。
+模型之间的差别基本只在这三件事上，所以不必让用户逐键去配：
+
+| `forge.profile` | 适用模型 | 质量词（置顶） | 补质量词 | 重排词序 | `style` |
+| --- | --- | --- | --- | --- | --- |
+| `tag`（默认） | Illustrious / NoobAI / Anima / Animagine 这类 SDXL 动漫微调 | `masterpiece, best_quality, highres` | 是 | 是 | `tag` |
+| `pony` | Pony Diffusion V6 及其各种融合版 | `score_9, score_8_up, score_7_up, source_anime` | 是 | 是 | `tag` |
+| `natural` | Flux / SD3.5 / 写实类（T5 或 LLM 文本编码器） | 无（交给工作流） | 否 | 否 | `prose` |
+| `custom` | 自己拿主意 | 读 `tags.qualityTags` | 读 `forge.quality` | 读 `forge.order` | `tag` |
+
+`natural` 档的关键差别是**保留模型给的短语顺序**：自然语言模型对语序敏感，按 14 段重排会把整句拆散，
+所以这一档不排序、不补质量词（T5 类编码器对 `masterpiece` 之类不买账），并让模型输出英文短语而不是标签堆砌
+（`style: "prose"`）。
+
+`prose` 档在实现上是整条链路都让路：不跑 ① 词形修复（不把短语改成 tag 形态）、不跑 ② 姿势补词、不跑 ③ 去重合序，
+最后的 `positive` 由 `lib/forge/index.js` 的 `formatRows(rows, syntax, prose)` 原样拼接 —— **空格保留、语序保留**，
+不会出现 `girl_sitting_on_bed` 这种被下划线吃掉的写法。反过来说，`tag` / `pony` 两档就该按 14 段重排、把质量词放在最前 ——
+前几个 token 对画面影响最大，放末尾基本白给。
+
+覆盖规则：前三档把 `quality` / `qualityTags` / `order` 三个值一并定死，配置里手改无效、面板与 `GET /profiles` 的
+`current` 显示的是**生效值**（不会出现「改了没反应」）；`custom` 档三个值都是 `null`，原样读
+`forge.quality` / `forge.order` / `tags.qualityTags`。不认识的 `profile` 值一律退回 `tag`，写错一个词不会导致锻造不出来。
+
+```js
+import { PROFILE_IDS, PROFILES, profileOf, listProfiles, applyProfile, profileState } from "./lib/model-profiles.js"
+applyProfile(cfg)   // -> { id, style, quality, qualityTags, order }  本次真正生效的值
+profileState(cfg)   // -> 同上 + { title, note, controlled }          controlled = 三项被档案接管
+listProfiles()      // -> 面板下拉用的四档清单（不含 null 实现细节）
+```
 
 ## 7. 标签索引契约（`lib/tags.js`）
 

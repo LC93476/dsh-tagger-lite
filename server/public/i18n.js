@@ -203,7 +203,15 @@ var I18N_BUILTIN_ZH = {
   "err.max-tokens": "模型输出被截断了（服务端已自动翻倍重试，还不行就把上限调高）",
   "err.method-not-allowed": "这个接口不接受这种请求方法",
   "err.internal": "服务端内部错误，看服务端控制台",
-  "ui.error.response": "响应不是 JSON（HTTP {status}）"
+  "ui.error.response": "响应不是 JSON（HTTP {status}）",
+  "ui.profile.label": "模型档案（质量词 / 词序）",
+  "ui.profile.saved": "已保存",
+  "ui.profile.failed": "切档失败：{text}",
+  "ui.profile.none": "不补质量词",
+  "ui.profile.orderOn": "词序：按分段重排",
+  "ui.profile.orderOff": "词序：保留模型顺序",
+  "ui.profile.custom": "自定义档：质量词与开关读配置",
+  "ui.profile.quality": "生效质量词："
 };
 // 静态骨架（panel.html 里写死的那批）在运行时要跟着语言走：选择器 → 字典键 → 写到哪个位置。
 // prop: text（textContent）/ placeholder / title / label（input 外面那层 label 的第一个文本节点）。
@@ -471,6 +479,11 @@ var I18N_STATIC = [
   {
     "sel": "#ref-file",
     "key": "ui.run.refLabel",
+    "prop": "label"
+  },
+  {
+    "sel": "#model-profile",
+    "key": "ui.profile.label",
     "prop": "label"
   },
   {

@@ -177,6 +177,26 @@ test('词序：镜头词即使权重更高也排在服装词后面，同段内�
   assert.equal(bucketChange.counts.camera, 2)
 })
 
+test('order:false 关掉词序重排：保留输入顺序且不记 order 条目；默认仍按 14 段排', () => {
+  const rows = [
+    { tag: 'close-up', weight: 1.4 },
+    { tag: 'smile', weight: 1.0 },
+    { tag: 'school_uniform', weight: 1.1 },
+  ]
+  // 造的时候给 order:false（自然语言档就是这么配的）：关键词一律跳过。
+  const off = createPostProcessor({ quality: false, order: false })
+  const skipped = off.apply(rows)
+  assert.deepEqual(tagsOf(skipped.rows), ['close-up', 'smile', 'school_uniform'], '输入什么顺序就什么顺序')
+  assert.deepEqual(skipped.changes, [], '跳过重排时 changes 里不该有 order / buckets（质量词也关了）')
+
+  // 调用级 opts.order 优先于创建时的配置：同一个后处理器能一条走重排、一条不走
+  const on = createPostProcessor({ quality: false })
+  assert.deepEqual(tagsOf(on.apply(rows).rows), ['smile', 'school_uniform', 'close-up'], '默认仍按 14 段排')
+  const perCall = on.apply(rows, { order: false })
+  assert.deepEqual(tagsOf(perCall.rows), ['close-up', 'smile', 'school_uniform'])
+  assert.equal(perCall.changes.some(function (item) { return item.kind === 'order' }), false)
+})
+
 test('补人数：白话有少女就补 1girl 并排在最前，权重 1.2', () => {
   const out = pp.apply(
     [

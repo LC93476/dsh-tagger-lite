@@ -818,3 +818,50 @@ test('withCn：库里没有的词不查、多条走一次批量查询', async ()
   assert.equal(out[2].cn, undefined, '库里没有的词不查也不补')
   assert.equal(out[3].cn, '微笑', '已经有中文名的行原样留着')
 })
+
+test('natural 档案：正向串跟短语走、不补质量词、词序不被重排', async () => {
+  // 自然语言档的模型输出是整句短语；这一档的关键是「别动我写的顺序、别把空格换成下划线」。
+  // 短语里的空格是 Flux / SD3.5 这类模型的自然语言，换成 tag 形态会跑偏，所以 formatRows 在 prose 档原样拼。
+  const phrases = ['a young woman smiling over her shoulder', 'dim bedroom light', 'close-up shot']
+  const expected = phrases.join(', ')
+  const described = '近景，卧室，光线很暗'
+  const makePayload = function () {
+    return jsonStream({ positive: phrases.map(function (tag) { return { tag, weight: 1 } }), notes: '补了窗边的光' })
+  }
+
+  const natural = await makeForge({
+    config: makeConfig({ forge: { profile: 'natural', quality: false, order: false, repair: false, poseHints: false } }),
+    llm: makePayload(),
+  }).generate({ text: described })
+
+  assert.equal(natural.ok, true)
+  assert.equal(natural.positive, expected, '短语顺序原样留着（顺序就是权重），镜头词不许被提到最前')
+  assert.equal(/masterpiece|best_quality|highres|score_9/.test(natural.positive), false, '自然语言档不补质量词')
+  assert.equal(natural.pipeline.changes.some(function (item) { return item.kind === 'order' }), false, '不该有重排痕迹')
+
+  // 对照：两个真词（镜头 + 服装）在 tag 档会被 14 段重排成「服装在镜头前」，
+  // natural 档保持模型给的顺序 —— 确认上面的「不重排」是档案生效的结果，不是巧合。
+  const pair = [{ tag: 'close-up', weight: 1 }, { tag: 'school_uniform', weight: 1 }]
+  const naturalPair = await makeForge({
+    config: makeConfig({ forge: { profile: 'natural', quality: false, repair: false, poseHints: false } }),
+    llm: jsonStream({ positive: pair, notes: '' }),
+  }).generate({ text: described })
+  assert.equal(naturalPair.positive, 'close-up, school_uniform', 'natural 档不重排，顺序照模型给的')
+
+  const tagPair = await makeForge({
+    config: makeConfig({ forge: { profile: 'tag', quality: false, repair: false, poseHints: false } }),
+    llm: jsonStream({ positive: pair, notes: '' }),
+  }).generate({ text: described })
+  assert.equal(tagPair.positive, 'school_uniform, close-up', 'tag 档照旧按桶序把服装排在镜头前')
+
+  // purge 侧：自然语言档写的是短语规范，不再出现「本地在串首加质量词」这类 tag 档话术
+  const naturalPrompt = buildForgeSystemPrompt(makeConfig({ forge: { profile: 'natural' } }))
+  assert.ok(naturalPrompt.includes('短语'), '自然语言档要按短语写')
+  assert.ok(naturalPrompt.includes('不写括号权重'))
+  assert.equal(naturalPrompt.includes('本地自动加在串首'), false, '自然语言档不提「本地自动加在串首」')
+  assert.ok(agentDirective(makeConfig({ forge: { profile: 'natural' } })).includes('按短语写'), '注入给宿主的短段也要按档换文案')
+
+  // pony 档的质量词换成 score 组，tag 档仍是 masterpiece 组
+  assert.ok(tagSpecText(makeConfig({ forge: { profile: 'pony' } })).includes('score_9'))
+  assert.ok(tagSpecText(makeConfig()).includes('masterpiece / best_quality / highres'))
+})

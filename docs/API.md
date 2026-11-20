@@ -9,7 +9,8 @@
 | --- | --- | --- |
 | GET | `/health` | `{ plugin: 'dsh-tagger', version, dataDir }` |
 | GET | `/state` | 面板启动一次性要的全部状态：`{ config, purge, comfy, workflows, workflowsError?, history }`（**没有 `ok` 字段**，出错看 `workflowsError` 与 `comfy.ok`） |
-| GET/POST | `/config` | GET 读配置视图（同样是裸对象，不含 `ok`）；POST `{ patch }` 写持久化覆盖并热应用 → `{ ok: true, config }` |
+| GET/POST | `/config` | GET 读配置视图 → `{ ok: true, config }`（**配置包在 `config` 里，不是裸对象**）；POST `{ patch }` 写持久化覆盖并热应用 → `{ ok: true, config }`。改 `forge.profile` 即可切换模型档案（见下文「模型档案」） |
+| GET | `/profiles` | 模型档案清单与当前生效值：`{ profiles: [{ id, title, note, style, quality, qualityTags, order }], current: { id, title, note, style, quality, qualityTags, order, controlled } }`（`ok: true`；`controlled: true` 表示质量词与词序由档案接管，改配置无效） |
 | GET/POST | `/purge` | GET 读破甲档位与系统提示词预览；POST `{ purge: { enabled, level, extraDirectives } }` |
 | GET | `/models?provider=` | 该 provider 可用模型列表 |
 | POST | `/probe` | LLM 连通性探针，返回逐 chunk 摘要（`{ ok, args, chunks, capped }`）；整条流 30s 上限、最多收 256 条 chunk，超了置 `capped: true` 提前收尾 |
@@ -130,6 +131,60 @@ curl -s -X POST http://127.0.0.1:PORT/tagger/api/config \
   -d '{"patch":{"forge":{"poseHints":false}}}'
 ```
 
+### 模型档案（`GET /profiles`）
+
+面板的「模型档案」下拉就吃这个接口：`profiles` 是四个可选档（顺序即下拉顺序），`current` 是当前配置下
+真正生效的那一档 —— `tag` / `pony` / `natural` 会把质量词、质量开关、词序开关一并定死，所以 `current` 里的值是
+**生效值**，和你 `settings.json` 里写的未必一样；`controlled: true` 就是在提醒这件事（要自己调就切 `custom`）。
+
+```bash
+curl -s http://127.0.0.1:PORT/tagger/api/profiles
+```
+
+```json
+{
+  "ok": true,
+  "profiles": [
+    { "id": "tag", "title": "Danbooru tag 系（SDXL 动漫微调）", "note": "…", "style": "tag",
+      "quality": true, "qualityTags": ["masterpiece", "best_quality", "highres"], "order": true },
+    { "id": "pony", "note": "…", "style": "tag",
+      "quality": true, "qualityTags": ["score_9", "score_8_up", "score_7_up", "source_anime"], "order": true },
+    { "id": "natural", "note": "…", "style": "prose",
+      "quality": false, "qualityTags": [], "order": false },
+    { "id": "custom", "note": "…", "style": "tag",
+      "quality": false, "qualityTags": [], "order": true }
+  ],
+  "current": {
+    "id": "tag", "title": "Danbooru tag 系（SDXL 动漫微调）", "note": "…", "style": "tag",
+    "quality": true, "qualityTags": ["masterpiece", "best_quality", "highres"], "order": true,
+    "controlled": true
+  }
+}
+```
+
+`profiles[]` 里的 `custom` 只给结构默认值（`false` / `[]` / `true`），它的真实取值看 `current`：读 `forge.quality` / `forge.order` / `tags.qualityTags`，其中 `tags.qualityTags` 会被规整成小写下划线、去重、最多 12 条。
+
+| 字段 | 说明 |
+| --- | --- |
+| `profiles[].id` | `tag` / `pony` / `natural` / `custom`，顺序即下拉顺序 |
+| `profiles[].title` / `note` | 面板上给人看的标题与一句说明 |
+| `profiles[].style` | `tag`（逗号分隔标签串）/ `prose`（自然语言短语） |
+| `profiles[].quality` | 是否补质量词 |
+| `profiles[].qualityTags` | 要补的质量词；`natural` 是空数组 |
+| `profiles[].order` | 是否按 14 段重排词序；`natural` 为 `false`（保留模型给的短语顺序） |
+
+`natural` 档返回的 `positive` 是**原样拼接的英文短语**：保留空格与语序，不跑词形修复 / 姿势补词 / 去重合序，
+所以别拿它去比对 tag 形态（`girl_sitting_on_bed` 那种写法只会出现在 `tag` / `pony` / `custom` 档）。
+| `current` | 当前档案的生效值，字段同上，另加 `title` / `note` / `controlled` |
+| `current.controlled` | `true` = 质量词、质量开关、词序由档案接管；要自定义请把 `forge.profile` 设成 `custom` |
+
+切换只是改一个配置键，不用重启：
+
+```bash
+curl -s -X POST http://127.0.0.1:PORT/tagger/api/config \
+  -H 'content-type: application/json' \
+  -d '{"patch":{"forge":{"profile":"pony"}}}'
+```
 ## `POST /refine`
 
 ```bash

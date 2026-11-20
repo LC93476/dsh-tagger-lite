@@ -736,6 +736,50 @@ test('POST 缺 body：/forge /upload /run /tags/canonicalize 都不 500', async 
   })
 })
 
+test('GET /profiles：四个档案齐全，切到 pony / natural 后 /config 回出生效值', async () => {
+  await withServer({}, async ({ base }) => {
+    const post = body => getJson(base + '/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ patch: body }),
+    })
+
+    const list = await getJson(base + '/profiles')
+    assert.equal(list.status, 200)
+    assert.equal(list.body.ok, true)
+    assert.equal(list.body.profiles.length, 4)
+    assert.deepEqual(list.body.profiles.map(p => p.id), ['tag', 'pony', 'natural', 'custom'])
+    for (const p of list.body.profiles) {
+      assert.equal(typeof p.title, 'string')
+      assert.equal(typeof p.note, 'string')
+      assert.ok(Array.isArray(p.qualityTags), p.id + ' 的 qualityTags 应该是数组')
+    }
+    assert.equal(list.body.current.id, 'tag')
+    assert.ok(list.body.current.qualityTags.includes('masterpiece'), 'tag 档的质量词里应该有 masterpiece')
+    assert.equal(list.body.current.order, true)
+
+    // 切 Pony：质量词换成 score_9 那一串（面板切档案走的就是这个 POST /config）
+    const pony = await post({ forge: { profile: 'pony' } })
+    assert.equal(pony.status, 200)
+    assert.equal(pony.body.ok, true)
+    assert.equal(pony.body.config.tags.qualityTags[0], 'score_9')
+
+    // 切自然语言：不补质量词、不重排词序
+    const natural = await post({ forge: { profile: 'natural' } })
+    assert.equal(natural.status, 200)
+    assert.equal(natural.body.config.forge.quality, false)
+    assert.deepEqual(natural.body.config.tags.qualityTags, [])
+    assert.equal(natural.body.config.forge.order, false)
+    assert.equal((await getJson(base + '/profiles')).body.current.id, 'natural')
+
+    // 复原，别把档案状态漏给后面的用例
+    const back = await post({ forge: { profile: 'tag' } })
+    assert.equal(back.status, 200)
+    assert.equal(back.body.config.forge.profile, 'tag')
+    assert.equal((await getJson(base + '/profiles')).body.current.id, 'tag')
+  })
+})
+
 test('GET /pose-thumb 与 GET /health：脏 id 回 404，version 跟着根 package.json', async () => {
   const pkg = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
   await withServer({}, async ({ base }) => {

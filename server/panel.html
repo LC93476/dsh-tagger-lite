@@ -41,6 +41,8 @@
     </div>
     <div class="row"><button id="comfy-save" class="primary">保存 ComfyUI</button><button id="comfy-ping" class="ghost">检测连通</button><button id="comfy-launch" class="ghost">启动 ComfyUI</button><span class="hint" id="comfy-status" style="margin:0"></span></div>
     <hr class="sep">
+    <div class="row"><label>模型档案（质量词 / 词序）<select id="model-profile"></select></label><span class="hint grow" id="profile-status" style="margin:0"></span></div>
+    <hr class="sep">
     <div class="grid2">
       <label class="wide">导入自定义工作流（ComfyUI 里「导出（API 格式）」的 .json；可再顺带选一份 .schema.json）<input id="wf-file" type="file" accept=".json,application/json" multiple></label>
       <label>模板 id<input id="wf-name" placeholder="my-sdxl-t2i" spellcheck="false"></label>
@@ -135,11 +137,7 @@
     <div class="hint" id="pose-count"></div>
   </div>
 </div>
-<!-- 依赖顺序：api（BASE + fetch）→ i18n（字典 + T + 静态文案回填 + 语言选择）→ state（state + 表单读写）
-     → render（状态灯 / 结果卡 / 错误码表）→ settings（设置表单 / 工作流下拉 / ComfyUI 探活）
-     → history（轮询预览 / 参考图 / 姿势弹窗 / 参数记忆）
-     → app（只做编排：boot + 三个动作 + 事件绑定，末尾自启）。全部是普通 script，共享全局，末尾的 app.js 必须最后加载。
-     界面文案由 i18n.js 的 T() 从字典取（GET /locale?lang=zh|en），HTML 里这几句中文只是「脚本没跑起来」时的兜底。 -->
+<!-- 依赖顺序：api → i18n → state → render → settings → history → app（普通 script 共享全局，app.js 必须最后）。文案走 T()，HTML 里的中文只是脚本没跑起来时的兜底。 -->
 <script src="/public/api.js"></script>
 <script src="/public/i18n.js"></script>
 <script src="/public/state.js"></script>

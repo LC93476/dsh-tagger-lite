@@ -152,6 +152,11 @@ test('main：参数错与找不到源目录都退 2，--help 退 0', () => {
   assert.equal(main(['--from', path.join(os.tmpdir(), 'definitely-missing-dict-' + Date.now())], io), 2)
 })
 test('--check 没有源目录时拿 manifest.json 自检：一致 0 / 被改过 1 / 缺 manifest 2', () => {
+  // 本机能装 DSH_DANBOORU_DIR 指到真词表；这个用例要的是「找不到源目录」那条分支，先摘掉环境变量。
+  const envKeys = ['DSH_DANBOORU_DIR', 'DSH_COMFYUI_DATA_DIR']
+  const saved = envKeys.map(key => [key, process.env[key]])
+  for (const key of envKeys) delete process.env[key]
+  try {
   const from = makeSource(3)
   const to = path.join(tmpDir(), 'data', 'danbooru')
   importDict({ from, to, min: 1 })
@@ -170,4 +175,10 @@ test('--check 没有源目录时拿 manifest.json 自检：一致 0 / 被改过 
   rmSync(path.join(to, 'manifest.json'))
   assert.equal(checkManifest(to).code, 'no-manifest')
   assert.equal(main(['--to', to, '--check', '--quiet'], io), 2)
+  } finally {
+    for (const [key, value] of saved) {
+      if (value === undefined) delete process.env[key]
+      else process.env[key] = value
+    }
+  }
 })
