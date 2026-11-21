@@ -1,6 +1,6 @@
 {
-  "source": "D:\\DSh tagger\\data\\danbooru",
-  "filteredAt": "2026-11-20T09:56:00.486Z",
+  "source": "D:\\QUARK\\studio-dist\\data\\danbooru",
+  "filteredAt": "2026-11-21T06:37:02.011Z",
   "sfw": true,
   "minGeneralLines": 20000,
   "blockedGroups": [

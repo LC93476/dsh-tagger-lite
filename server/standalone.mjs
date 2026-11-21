@@ -369,6 +369,7 @@ try {
 const SELF_DIR = path.dirname(fileURLToPath(import.meta.url))
 const PANEL_FILE = path.join(SELF_DIR, 'panel.html')
 const GALLERY_FILE = path.join(SELF_DIR, 'public', 'gallery.html')
+const STUDIO_FILE = path.join(SELF_DIR, 'public', 'studio.html')
 // 面板拆出来的静态资源（样式 / 脚本）：只从这里读，别的目录一律不认。
 const PUBLIC_DIR = path.resolve(SELF_DIR, 'public')
 // public 的真实路径（解软链后），第一次用到时算一次；算不出来就退回落差
@@ -542,6 +543,16 @@ function galleryHtml() {
   }
 }
 
+/** 三栏工作台：左提示词 / 中参考样式 / 右生成结果，读盘失败同样退回信息页。 */
+function studioHtml() {
+  try {
+    return readFileSync(STUDIO_FILE, 'utf8')
+  } catch (error) {
+    rt.log.info('读不到 server/public/studio.html，退回信息页：' + (error instanceof Error ? error.message : String(error)))
+    return htmlShell()
+  }
+}
+
 /** 注册一个只读 HTML 页面（GET / HEAD，no-store）。 */
 function registerHtmlPage(routePath, getHtml) {
   disposers.push(
@@ -572,8 +583,11 @@ disposers.push(webServer.register({ kind: 'prefix', path: '/public', handler: se
 // 姿势画廊：单独的展示页（挑姿势拿 tag，不跑 ControlNet），HTML 与样式脚本都在 server/public 下。
 registerHtmlPage('/gallery', galleryHtml)
 
-// 面板：/ 与 /panel 都是锻造台；/about 是原来的信息页（健康状态 + 接口清单）。
-registerHtmlPage('/', panelHtml)
+// 三栏工作台：把提示词、参考样式、生成结果放进同一屏（前端是 server/public/studio.*）。
+registerHtmlPage('/studio', studioHtml)
+
+// 默认页 = 三栏工作台（/ 直接进工作台）；锻造台挪到 /panel，两边都能进。
+registerHtmlPage('/', studioHtml)
 registerHtmlPage('/panel', panelHtml)
 registerHtmlPage('/panel.html', panelHtml)
 registerHtmlPage('/about', htmlShell)

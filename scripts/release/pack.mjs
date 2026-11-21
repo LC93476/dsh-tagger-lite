@@ -6,7 +6,7 @@
  * 为什么自己写 zip：目标机器可能连 node 都没有（Windows 双击 deploy.cmd 会临时下载一份便携 node），
  * 所以打包这一步不能依赖 npm / zip 命令 / 7z。这里只用 node 标准库：
  *   - 目录复制：fs.cpSync
- *   - 压缩包：store（不压缩）方式的 ZIP，自己算 CRC32 写中央目录
+ *   - 压缩包：DEFLATE（method 8）ZIP，自己算 CRC32 写中央目录；压不小就回退 store
  * 好处是产物字节确定、任何解压工具都认（Windows 资源管理器 / macOS 归档实用工具 / unzip）。
  *
  * 用法：
@@ -19,6 +19,7 @@
  * 不含 tests/ scripts/（只带 scripts/win）/ public-src/ .git/ —— 那些是开发期的东西，公开版另有一条 make-public 流水线。
  */
 import { createHash } from "node:crypto"
+import { deflateRawSync } from "node:zlib"
 import { chmodSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs"
 import path from "node:path"
 import process from "node:process"
@@ -36,6 +37,13 @@ export const INCLUDE_DIRS = ["lib", "server", "data", "locale", "scripts/win"]
 export const INCLUDE_FILES = [
   "package.json",
   "index.js",
+  "bin/tagger.mjs",
+  "scripts/setup.mjs",
+  "start.cmd",
+  "start.sh",
+  "start-tagger.cmd",
+  "start-tagger-hidden.vbs",
+  "stop-tagger.cmd",
   "icon.svg",
   "README.md",
   "INSTALL.md",
@@ -114,8 +122,30 @@ export function crc32(buf) {
   return (c ^ 0xffffffff) >>> 0
 }
 
+/** 值得压的扩展名：文本类。图片 / 字体 / 已压缩格式不折腾，直接 store 更省 CPU。 */
+export const COMPRESSIBLE_EXT = new Set([
+  ".jsonl", ".js", ".mjs", ".json", ".html", ".css", ".md", ".txt",
+  ".svg", ".cmd", ".sh", ".vbs", ".yml", ".yaml", ".example",
+])
+
 /**
- * 生成 store 方式的 ZIP。
+ * 决定一个条目怎么存。
+ * @param {string} name zip 内的条目名（取扩展名用）
+ * @param {Buffer} data 原始字节
+ * @returns {{ method: number, payload: Buffer }} method 0 = store，8 = deflate
+ */
+export function compressEntry(name, data) {
+  const ext = path.extname(name).toLowerCase()
+  if (!COMPRESSIBLE_EXT.has(ext) || data.length === 0) return { method: 0, payload: data }
+  const packed = deflateRawSync(data, { level: 9 })
+  // 压不小（已是压缩数据 / 极小文本）就回退 store，别让包反而变大
+  if (packed.length >= data.length) return { method: 0, payload: data }
+  return { method: 8, payload: packed }
+}
+
+/**
+ * 生成 ZIP（文本走 DEFLATE，压不小回退 store）。一次性写全 buffer，不需要数据描述符，
+ * 所以标志位只留 0x0800（文件名 UTF-8）。
  * @param {Array<{ name: string, data: Buffer }>} entries
  * @returns {Buffer}
  */
@@ -126,32 +156,33 @@ export function makeZip(entries) {
   for (const entry of entries) {
     const nameBuf = Buffer.from(entry.name, "utf8")
     const data = entry.data
-    const crc = crc32(data)
+    const { method, payload } = compressEntry(entry.name, data)
+    const crc = crc32(data) // CRC 一律算未压缩数据
     const local = Buffer.alloc(30)
     local.writeUInt32LE(0x04034b50, 0)
     local.writeUInt16LE(20, 4) // 需要的解压版本 2.0
     local.writeUInt16LE(0x0800, 6) // 标志：文件名按 UTF-8
-    local.writeUInt16LE(0, 8) // 压缩方式：store
+    local.writeUInt16LE(method, 8) // 压缩方式：8 = deflate，0 = store
     local.writeUInt16LE(0, 10) // 修改时间 00:00
     local.writeUInt16LE(0x21, 12) // 修改日期 1980-01-01
     local.writeUInt32LE(crc, 14)
-    local.writeUInt32LE(data.length, 18)
-    local.writeUInt32LE(data.length, 22)
+    local.writeUInt32LE(payload.length, 18) // 压缩后
+    local.writeUInt32LE(data.length, 22) // 原始
     local.writeUInt16LE(nameBuf.length, 26)
     local.writeUInt16LE(0, 28)
-    locals.push(local, nameBuf, data)
+    locals.push(local, nameBuf, payload)
 
     const central = Buffer.alloc(46)
     central.writeUInt32LE(0x02014b50, 0)
     central.writeUInt16LE(20, 4) // 制作版本
     central.writeUInt16LE(20, 6) // 需要版本
     central.writeUInt16LE(0x0800, 8)
-    central.writeUInt16LE(0, 10)
+    central.writeUInt16LE(method, 10)
     central.writeUInt16LE(0, 12)
     central.writeUInt16LE(0x21, 14)
     central.writeUInt32LE(crc, 16)
-    central.writeUInt32LE(data.length, 20)
-    central.writeUInt32LE(data.length, 24)
+    central.writeUInt32LE(payload.length, 20) // 压缩后
+    central.writeUInt32LE(data.length, 24) // 原始
     central.writeUInt16LE(nameBuf.length, 28)
     central.writeUInt16LE(0, 30) // extra
     central.writeUInt16LE(0, 32) // comment
@@ -161,7 +192,7 @@ export function makeZip(entries) {
     central.writeUInt32LE(offset, 42)
     centrals.push(central, nameBuf)
 
-    offset += local.length + nameBuf.length + data.length
+    offset += local.length + nameBuf.length + payload.length
   }
   const centralBuf = Buffer.concat(centrals)
   const end = Buffer.alloc(22)
@@ -241,7 +272,7 @@ export function makeDist(options = {}) {
   writeFileSync(path.join(dir, "MANIFEST.txt"), manifest.join("\n") + "\n")
 
   // 解压后 Linux/macOS 上这两个脚本要能直接执行（zip 里也记了 644）
-  for (const script of ["deploy.sh", "start.sh", "scripts/win/stop-tagger.cmd"]) {
+  for (const script of ["deploy.sh", "start.sh", "start.cmd", "start-tagger.cmd", "stop-tagger.cmd", "scripts/win/stop-tagger.cmd"]) {
     const abs = path.join(dir, script)
     if (existsSync(abs) && process.platform !== "win32") chmodSync(abs, 0o755)
   }

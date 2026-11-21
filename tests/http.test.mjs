@@ -793,4 +793,182 @@ test('GET /pose-thumb 与 GET /health：脏 id 回 404，version 跟着根 packa
   })
 })
 
+test('GET /styles：五组齐全，total 与 styles.length 一致，cn 与 tags 一一对应', async t => {
+  const styleMod = await import('../lib/styles.js').catch(() => null)
+  if (styleMod === null) {
+    t.skip('lib/styles.js 还没落盘，/styles 暂时回 503')
+    return
+  }
+  await withServer({}, async ({ base }) => {
+    const list = await getJson(base + '/styles')
+    assert.equal(list.status, 200)
+    assert.equal(list.body.ok, true)
+    assert.equal(list.body.groups.length, 5)
+    for (const group of list.body.groups) {
+      assert.equal(typeof group.key, 'string')
+      assert.equal(typeof group.label, 'string')
+      assert.equal(typeof group.note, 'string')
+    }
+    assert.ok(Array.isArray(list.body.styles))
+    assert.equal(list.body.total, list.body.styles.length)
+    assert.ok(list.body.styles.length >= 30, '样式卡片至少 30 张，实际 ' + list.body.styles.length)
+    for (const style of list.body.styles) {
+      assert.equal(typeof style.id, 'string')
+      assert.ok(Array.isArray(style.tags) && style.tags.length > 0, style.id + ' 的 tags 不能为空')
+      assert.equal(style.cn.length, style.tags.length, style.id + ' 的 cn 必须与 tags 等长')
+      for (const name of style.cn) assert.equal(typeof name, 'string')
+    }
+  })
+})
+
+test('GET /styles?group 与 ?q：只留该组，groups 仍全量', async t => {
+  const styleMod = await import('../lib/styles.js').catch(() => null)
+  if (styleMod === null) {
+    t.skip('lib/styles.js 还没落盘，/styles 暂时回 503')
+    return
+  }
+  await withServer({}, async ({ base }) => {
+    const all = await getJson(base + '/styles')
+    const target = all.body.groups[0].key
+    const filtered = await getJson(base + '/styles?group=' + encodeURIComponent(target))
+    assert.equal(filtered.status, 200)
+    assert.equal(filtered.body.ok, true)
+    assert.equal(filtered.body.groups.length, 5, 'group 过滤不影响 groups')
+    assert.equal(filtered.body.total, filtered.body.styles.length)
+    assert.ok(filtered.body.styles.length > 0)
+    for (const style of filtered.body.styles) assert.equal(style.group, target)
+    assert.ok(filtered.body.total < all.body.total, '过滤后应该比全量少')
+
+    const sample = all.body.styles[0]
+    const hit = await getJson(base + '/styles?q=' + encodeURIComponent(sample.title))
+    assert.equal(hit.status, 200)
+    assert.ok(hit.body.styles.some(style => style.id === sample.id), 'q 要能在 title 里匹配')
+    assert.equal(hit.body.total, hit.body.styles.length)
+  })
+})
+
+test('GET /styles 单条：已知 id 回 style，未知 id 404 no-style', async t => {
+  const styleMod = await import('../lib/styles.js').catch(() => null)
+  if (styleMod === null) {
+    t.skip('lib/styles.js 还没落盘，/styles 暂时回 503')
+    return
+  }
+  const sample = styleMod.STYLES[0]
+  await withServer({}, async ({ base }) => {
+    const one = await getJson(base + '/styles/' + encodeURIComponent(sample.id))
+    assert.equal(one.status, 200)
+    assert.equal(one.body.ok, true)
+    assert.equal(one.body.style.id, sample.id)
+    assert.deepEqual(one.body.style.tags, sample.tags)
+    assert.equal(one.body.style.cn.length, one.body.style.tags.length)
+
+    const missing = await getJson(base + '/styles/definitely-not-a-style')
+    assert.equal(missing.status, 404)
+    assert.equal(missing.body.ok, false)
+    assert.equal(missing.body.error, 'no-style')
+  })
+})
+
+/** 造一份最小的假姿势库：catalog.csv 描述两套体系，withImages 时再放两张图。 */
+function makePoseLibrary(withImages) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-http-pose-'))
+  const sexy = path.join(root, 'custom_nodes', 'ai-pose-gallery-zh', 'skills', 'pose-reference-sexy', 'references')
+  fs.mkdirSync(sexy, { recursive: true })
+  fs.writeFileSync(path.join(sexy, 'catalog.csv'), [
+    'id,体系,分类,姿势编号,姿势名称,角度,图片',
+    'full_sexy_P016_front,全身单人・性感系,坐姿,P016,侧坐・单手支撑,正面,../../img/a.png',
+    'full_sexy_P016_side,全身单人・性感系,坐姿,P016,侧坐・单手支撑,侧面,../../img/b.png',
+  ].join('\n'))
+  if (withImages === true) {
+    const imgDir = path.join(root, 'custom_nodes', 'ai-pose-gallery-zh', 'img')
+    fs.mkdirSync(path.join(imgDir, 'thumbs'), { recursive: true })
+    fs.writeFileSync(path.join(imgDir, 'thumbs', 'full_sexy_P016_side.jpg'), 'jpg-bytes')
+  }
+  return root
+}
+
+test('GET /pose-tags：冷启动先等索引 ready()，再回标签映射', async t => {
+  const root = makePoseLibrary(false)
+  await withServer({ comfy: { launchDir: root } }, async ({ base, rt }) => {
+    let ready = false
+    rt.tags.ready = async () => {
+      await new Promise(resolve => setTimeout(resolve, 60))
+      ready = true
+    }
+    const hit = await getJson(base + '/pose-tags?base=full_sexy_P016&angle=' + encodeURIComponent('正面'))
+    assert.notEqual(hit.status, 500)
+    if (hit.status === 501) {
+      // 映射模块缺席时接口自己会说不支持，但也不能 500
+      assert.equal(hit.body.error, 'pose-tags-unavailable')
+      return
+    }
+    assert.equal(hit.status, 200)
+    assert.equal(hit.body.base, 'full_sexy_P016')
+    assert.ok(Array.isArray(hit.body.tags))
+    if (hit.body.tags.length > 0) assert.equal(ready, true, '映射标签之前必须等索引就绪')
+    else t.diagnostic('映射结果是空表，ready 顺序靠 /tags 用例覆盖')
+  })
+})
+
+test('GET /ref-tags：非法 id 400 bad-id，库不在 404 no-ref-library，都不 500', async () => {
+  await withServer({}, async ({ base }) => {
+    const badKind = await getJson(base + '/ref-tags?kind=shoes&id=SPR-0001')
+    assert.equal(badKind.status, 400)
+    assert.equal(badKind.body.error, 'bad-kind')
+
+    // 路径穿越写法在 id 校验就被挡下，不会走到读盘
+    const badId = await getJson(base + '/ref-tags?kind=costume&id=' + encodeURIComponent('../settings.json'))
+    assert.equal(badId.status, 400)
+    assert.equal(badId.body.error, 'bad-id')
+
+    const noLib = await getJson(base + '/ref-tags?kind=costume&id=SPR-0001')
+    assert.notEqual(noLib.status, 500)
+    if (noLib.status === 404) assert.equal(noLib.body.error, 'no-ref-library')
+    else assert.equal(noLib.status, 501)
+  })
+})
+
+test('HEAD /pose-thumb：探测尺寸不该 405，状态与 GET 一致', async () => {
+  const root = makePoseLibrary(true)
+  await withServer({ comfy: { launchDir: root } }, async ({ base }) => {
+    const url = base + '/pose-thumb?id=full_sexy_P016_side'
+    const head = await fetch(url, { method: 'HEAD' })
+    assert.equal(head.status, 200)
+    assert.equal(head.headers.get('content-type'), 'image/jpeg')
+
+    const got = await fetch(url)
+    assert.equal(got.status, 200)
+    assert.equal(await got.text(), 'jpg-bytes')
+
+    const dirty = await fetch(base + '/pose-thumb?id=definitely-not-a-pose', { method: 'HEAD' })
+    assert.equal(dirty.status, 404)
+  })
+})
+
+test('POST /forge 与 /run：options / vars 传成数组也不 500', async () => {
+  await withServer({}, async ({ base }) => {
+    const forge = await getJson(base + '/forge', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: '雨夜霓虹街头的少女', options: [] }),
+    })
+    assert.equal(forge.status, 200)
+    assert.equal(forge.body.ok, true)
+
+    const refine = await getJson(base + '/refine', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ positive: '1girl, rain', instruction: '加点雨天氛围', options: [] }),
+    })
+    assert.notEqual(refine.status, 500)
+
+    const run = await getJson(base + '/run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ workflowId: 'nope', vars: [] }),
+    })
+    assert.notEqual(run.status, 500)
+  })
+})
+
 

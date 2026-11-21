@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark light">
+<title>三栏工作台 · DSh Tagger</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22 viewBox=%220 0 16 16%22%3E%3Crect width=%2216%22 height=%2216%22 rx=%224%22 fill=%22%237b95f7%22/%3E%3C/svg%22%3E">
+<link rel="stylesheet" href="/public/studio.css">
+</head>
+<body>
+<header class="top">
+  <div class="crumb">
+    <span class="crumb-root">DSh Tagger</span>
+    <span class="crumb-sep" aria-hidden="true">/</span>
+    <span class="crumb-now">三栏工作台</span>
+  </div>
+  <div class="top-right">
+    <span class="pill" id="pill-llm" data-kind="idle"><i aria-hidden="true"></i><span id="pill-llm-text">LLM</span></span>
+    <span class="pill" id="pill-comfy" data-kind="idle"><i aria-hidden="true"></i><span id="pill-comfy-text">ComfyUI</span></span>
+    <span class="pill" id="pill-profile" data-kind="idle"><i aria-hidden="true"></i><span id="pill-profile-text">模型档案</span></span>
+    <button class="lnk" id="btn-settings" type="button" aria-haspopup="dialog" aria-controls="settings">设置</button>
+    <a class="lnk" href="/gallery">姿势画廊 ↗</a>
+    <a class="lnk" href="/panel">精简面板 ↗</a>
+  </div>
+</header>
+
+<main class="studio">
+  <!-- 左栏：提示词 -->
+  <section class="col col-prompt" id="col-prompt" aria-labelledby="h-prompt">
+    <div class="col-head">
+      <h1 id="h-prompt">提示词</h1>
+      <button class="mini" id="prompt-clear" type="button" title="清空提示词">清空</button>
+    </div>
+
+    <label class="field">
+      <span class="field-label">白话描述</span>
+      <textarea id="prompt" class="ta" rows="8" placeholder="用白话写画面：一个银发女孩站在雨后的天台，湿衬衫，回头看向镜头……"
+                spellcheck="false" aria-label="白话描述"></textarea>
+    </label>
+
+    <div class="params" role="group" aria-label="锻造参数">
+      <label class="num"><span>maxTags</span><input id="maxTags" type="number" min="8" max="160" step="1" value="40" inputmode="numeric"></label>
+      <label class="num"><span>破甲档</span><select id="level"></select></label>
+      <label class="chk"><input id="solo" type="checkbox"><span>单人</span></label>
+      <label class="num wide"><span>模型档案</span><select id="profile"></select></label>
+    </div>
+
+    <div class="row">
+      <button class="btn primary" id="btn-forge" type="button">锻造</button>
+      <span class="hint" id="forge-status" role="status" aria-live="polite">就绪</span>
+    </div>
+    <p class="warn" id="forge-warn" hidden></p>
+
+    <div class="out">
+      <div class="out-head">
+        <h2>正向</h2>
+        <span class="dim" id="pos-count">0 tag</span>
+        <button class="mini" id="pos-copy" type="button">复制</button>
+      </div>
+      <div class="str" id="positive" tabindex="0" aria-label="正向提示词"></div>
+      <div class="chips" id="chips" aria-label="正向 tag 列表"></div>
+    </div>
+
+    <div class="out">
+      <div class="out-head">
+        <h2>负向</h2>
+        <span class="dim" id="neg-count">0 tag</span>
+        <button class="mini" id="neg-copy" type="button">复制</button>
+      </div>
+      <div class="str" id="negative" tabindex="0" aria-label="负向提示词"></div>
+    </div>
+  </section>
+
+  <!-- 中栏：参考样式 -->
+  <section class="col col-ref" id="col-ref" aria-labelledby="h-ref">
+    <div class="col-head">
+      <h1 id="h-ref">参考样式</h1>
+      <div class="tabs" role="tablist" aria-label="参考类型">
+        <button class="tab is-on" id="tab-pose" type="button" role="tab" aria-selected="true" aria-controls="panel-pose">姿势</button>
+        <button class="tab" id="tab-costume" type="button" role="tab" aria-selected="false" aria-controls="panel-costume">服装<span class="tab-count" id="tab-costume-count" hidden></span></button>
+        <button class="tab" id="tab-portrait" type="button" role="tab" aria-selected="false" aria-controls="panel-portrait">人像<span class="tab-count" id="tab-portrait-count" hidden></span></button>
+        <button class="tab" id="tab-style" type="button" role="tab" aria-selected="false" aria-controls="panel-style">样式</button>
+      </div>
+    </div>
+
+    <div class="panel" id="panel-pose" role="tabpanel" aria-labelledby="tab-pose">
+      <div class="searchbar">
+        <label class="search">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"></circle><path d="M15.4 15.4 21 21"></path></svg>
+          <input id="pose-q" type="search" placeholder="搜姿势名称、编号（P041）、分类" autocomplete="off" spellcheck="false" aria-label="搜索姿势">
+        </label>
+      </div>
+      <div class="seg" id="pose-sets" role="tablist" aria-label="体系"></div>
+      <div class="pills" id="pose-cats" aria-label="分类筛选"></div>
+      <div class="angles" id="pose-angles" aria-label="视角"></div>
+      <div class="pose-grid" id="pose-grid"></div>
+      <div class="empty" id="pose-empty" hidden>
+        <p>没有匹配的姿势。</p>
+        <p class="dim">换个关键词，或点「全部」看回来。</p>
+      </div>
+      <div class="more"><button class="mini" id="pose-more" type="button" hidden>加载更多</button></div>
+    </div>
+
+    <div class="panel" id="panel-costume" role="tabpanel" aria-labelledby="tab-costume" hidden>
+      <div class="searchbar">
+        <label class="search">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"></circle><path d="M15.4 15.4 21 21"></path></svg>
+          <input id="costume-q" type="search" placeholder="搜服装名称、编号（SPR-0001）、关键词" autocomplete="off" spellcheck="false" aria-label="搜索服装">
+        </label>
+      </div>
+      <div class="pills" id="costume-cats" aria-label="服装分类"></div>
+      <div class="ref-grid" id="ref-costume-grid"></div>
+      <div class="empty" id="costume-empty" hidden>
+        <p id="costume-empty-line">没有匹配的服装。</p>
+        <p class="dim" id="costume-empty-hint">换个关键词，或点「全部分类」看回来。</p>
+      </div>
+      <div class="more"><button class="mini" id="costume-more" type="button" hidden>加载更多</button></div>
+    </div>
+
+    <div class="panel" id="panel-portrait" role="tabpanel" aria-labelledby="tab-portrait" hidden>
+      <div class="searchbar">
+        <label class="search">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"></circle><path d="M15.4 15.4 21 21"></path></svg>
+          <input id="portrait-q" type="search" placeholder="搜标题、发型、编号" autocomplete="off" spellcheck="false" aria-label="搜索人像">
+        </label>
+      </div>
+      <div class="seg" id="portrait-sets" role="tablist" aria-label="分区"></div>
+      <div class="pills" id="portrait-hairs" aria-label="发长"></div>
+      <div class="pills" id="portrait-flags" aria-label="人像筛选">
+        <button class="pill-i" id="portrait-popular" type="button" aria-pressed="false">只看热门</button>
+      </div>
+      <div class="ref-grid ref-grid-portrait" id="ref-portrait-grid"></div>
+      <div class="empty" id="portrait-empty" hidden>
+        <p id="portrait-empty-line">没有匹配的人像。</p>
+        <p class="dim" id="portrait-empty-hint">换个关键词，或把筛选放宽一点。</p>
+      </div>
+      <div class="more"><button class="mini" id="portrait-more" type="button" hidden>加载更多</button></div>
+    </div>
+
+    <div class="panel" id="panel-style" role="tabpanel" aria-labelledby="tab-style" hidden>
+      <div class="style-groups" id="style-groups"></div>
+      <p class="dim" id="style-status">样式库加载中…</p>
+      <div class="row sticky-row">
+        <button class="btn" id="style-apply" type="button" disabled>套用所选样式到提示词</button>
+        <span class="dim" id="style-picked">已选 0</span>
+      </div>
+    </div>
+
+    <div class="rdock" id="ref-dock" hidden>
+      <img class="rdock-thumb" id="ref-dock-thumb" alt="" loading="lazy" referrerpolicy="no-referrer">
+      <div class="rdock-body">
+        <div class="rdock-head">
+          <span class="rdock-name" id="ref-dock-name"></span>
+          <span class="rdock-meta dim" id="ref-dock-meta"></span>
+        </div>
+        <div class="rdock-tags" id="ref-dock-tags"></div>
+        <p class="rdock-note" id="ref-dock-note" hidden></p>
+      </div>
+      <div class="rdock-acts">
+        <button class="mini" id="ref-dock-copy" type="button">复制 tag</button>
+        <button class="mini" id="ref-dock-fill" type="button">填入提示词</button>
+        <button class="mini" id="ref-dock-clear" type="button">清空</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 右栏：生成结果 -->
+  <section class="col col-gen" id="col-gen" aria-labelledby="h-gen">
+    <div class="col-head">
+      <h1 id="h-gen">生成结果</h1>
+      <span class="dim" id="run-badge">未提交</span>
+    </div>
+
+    <div class="params gen">
+      <label class="num wide"><span>工作流</span><select id="workflow"></select></label>
+      <label class="num"><span>宽</span><input id="width" type="number" min="64" max="4096" step="8" value="1200" inputmode="numeric"></label>
+      <label class="num"><span>高</span><input id="height" type="number" min="64" max="4096" step="8" value="1800" inputmode="numeric"></label>
+      <label class="num"><span>seed</span><input id="seed" type="number" min="0" step="1" value="20261108" inputmode="numeric"></label>
+      <label class="num"><span>steps</span><input id="steps" type="number" min="1" max="150" step="1" value="30" inputmode="numeric"></label>
+      <label class="num"><span>cfg</span><input id="cfg" type="number" min="0.5" max="30" step="0.1" value="5.03" inputmode="decimal"></label>
+      <label class="num wide"><span>参考图</span><input id="ref-file" type="file" accept="image/png,image/jpeg,image/webp"></label>
+      <span class="hint" id="ref-name" hidden></span>
+      <button class="btn" id="ref-clear" type="button" hidden>清除参考图</button>
+    </div>
+
+    <div class="row">
+      <button class="btn primary" id="btn-run" type="button">出图</button>
+      <span class="hint" id="run-status" role="status" aria-live="polite">就绪</span>
+    </div>
+    <div class="progress" id="run-progress" hidden><i></i></div>
+
+    <div class="shots" id="results"></div>
+    <div class="empty" id="results-empty">
+      <p>还没有出图。</p>
+      <p class="dim">左栏锻造出 tag，再点「出图」。</p>
+    </div>
+
+    <div class="hist">
+      <div class="hist-head"><h2>本次提交记录</h2><span class="dim" id="hist-count">0 条</span></div>
+      <ol class="hist-list" id="history"></ol>
+    </div>
+  </section>
+</main>
+
+<!-- 接口设置：LLM 与 ComfyUI，存到 /tagger/api/config（落盘 data/settings.json，key 不以明文回传） -->
+<div class="drawer" id="settings" hidden>
+  <div class="drawer-mask" data-close="1"></div>
+  <aside class="drawer-card" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+    <div class="drawer-head">
+      <h2 id="settings-title">接口设置</h2>
+      <button class="mini" id="settings-close" type="button">关闭</button>
+    </div>
+
+    <div class="drawer-body">
+      <section class="set-block" aria-labelledby="set-llm-title">
+        <h3 id="set-llm-title">LLM · 锻造与精修</h3>
+        <label class="field"><span class="field-label">快速预设</span>
+          <select class="inp" id="set-llm-preset"><option value="">— 手填 —</option></select>
+        </label>
+        <label class="field"><span class="field-label">接口地址</span>
+          <input class="inp" id="set-llm-base" type="text" placeholder="https://api.deepseek.com/v1" spellcheck="false" autocomplete="off">
+          <span class="tip">只填域名也认：自动补 https:// 与 /v1；本机服务写 http://127.0.0.1:11434/v1</span>
+        </label>
+        <label class="field"><span class="field-label">API Key</span>
+          <input class="inp" id="set-llm-key" type="password" placeholder="sk-…（留空表示不改）" autocomplete="off" spellcheck="false">
+          <span class="tip" id="set-llm-keyhint">还没有保存过 key</span>
+        </label>
+        <label class="field"><span class="field-label">模型</span>
+          <input class="inp" id="set-llm-model" type="text" list="set-llm-models" placeholder="deepseek-chat" spellcheck="false" autocomplete="off">
+          <datalist id="set-llm-models"></datalist>
+        </label>
+        <div class="row">
+          <button class="btn" id="set-llm-probe" type="button">测试连接</button>
+          <button class="btn primary" id="set-llm-save" type="button">保存 LLM</button>
+          <span class="hint" id="set-llm-status" role="status" aria-live="polite">未测试</span>
+        </div>
+      </section>
+
+      <section class="set-block" aria-labelledby="set-comfy-title">
+        <h3 id="set-comfy-title">ComfyUI · 出图</h3>
+        <label class="field"><span class="field-label">接口地址</span>
+          <input class="inp" id="set-comfy-base" type="text" placeholder="http://127.0.0.1:8188" spellcheck="false" autocomplete="off">
+          <span class="tip">只填 8188 或 127.0.0.1:8188 也行，会自动补成 http://…</span>
+        </label>
+        <label class="field"><span class="field-label">安装目录</span>
+          <input class="inp" id="set-comfy-dir" type="text" list="set-comfy-dirs" placeholder="D:/ComfyUI" spellcheck="false" autocomplete="off">
+          <datalist id="set-comfy-dirs"></datalist>
+          <span class="tip">可以直接粘贴 main.py 的完整路径或整条启动命令，保存时自动拆出目录 / python / 参数</span>
+        </label>
+        <label class="field"><span class="field-label">Python（可留空）</span>
+          <input class="inp" id="set-comfy-python" type="text" placeholder="D:/ComfyUI/.venv/Scripts/python.exe" spellcheck="false" autocomplete="off">
+        </label>
+        <label class="field"><span class="field-label">额外启动参数（可留空）</span>
+          <input class="inp" id="set-comfy-args" type="text" placeholder="--lowvram --preview-method none" spellcheck="false" autocomplete="off">
+        </label>
+        <div class="row">
+          <button class="btn" id="set-comfy-ping" type="button">探测状态</button>
+          <button class="btn" id="set-comfy-launch" type="button">启动 ComfyUI</button>
+          <button class="btn primary" id="set-comfy-save" type="button">保存 ComfyUI</button>
+          <span class="hint" id="set-comfy-status" role="status" aria-live="polite">未探测</span>
+        </div>
+        <p class="tip" id="set-comfy-plan"></p>
+      </section>
+    </div>
+  </aside>
+</div>
+
+<div class="lightbox" id="lightbox" hidden>
+  <div class="lightbox-mask" data-close="1"></div>
+  <figure class="lightbox-card" role="dialog" aria-modal="true" aria-label="大图预览">
+    <img id="lightbox-img" alt="">
+    <figcaption><span id="lightbox-name"></span><button class="mini" id="lightbox-close" type="button" aria-label="关闭">×</button></figcaption>
+  </figure>
+</div>
+
+<div class="toast" id="toast" hidden role="status" aria-live="polite"></div>
+
+<script type="module" src="/public/studio.js"></script>
+</body>
+</html>
