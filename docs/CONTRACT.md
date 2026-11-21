@@ -317,7 +317,8 @@ listProfiles()      // -> 面板下拉用的四档清单（不含 null 实现细
 
 ```js
 export function createTagIndex({ dir, logger, dataDirs }) -> index
-index.stats() -> { loaded, general, character, copyright, artist, sourceFiles, builtAt, ready }
+index.stats() -> { loaded, general, character, copyright, artist, sourceFiles, builtAt, ready,
+                    seedOnly, dataDir, sfw, sfwKnown }   // sfw/sfwKnown 读快照 manifest.json 的 sfw 标记
 index.search(query, { limit, kinds }) -> [{ tag, kind, cn, postCount, aliases, standards }]
 index.canonicalize(raw, { standards, syntax }) -> { tag, weight, matched, kind, cn, note }
 index.canonicalizeMany(list, { syntax }) -> [{ raw, tag, weight, matched, kind, cn }]
@@ -336,6 +337,8 @@ index.reload() / index.ensureFresh() -> Promise<boolean>   // overlay 改动热�
 → 内置 `lib/seed-tags.js` 兜底。
 
 仓库里那份 `data/danbooru/` 在私有仓是完整快照（99447 条），在公开仓是 `scripts/tags/filter-dict.mjs` 过滤出的 SFW 快照（四份、约 97497 条、`manifest.sfw === true`）；加载器不区分两者，只按 jsonl 读。
+
+`stats().sfw` 只认 manifest 里显式写的 `sfw: true`；没有 manifest 的目录（自己从 workbench 导的完整快照）一律 `sfw: false, sfwKnown: false`。工作台的 `/studio` 设置抽屉据此显示「词库 · Tag 数据」一行（条数 + 是否含成人向词条），提示只写在设置里，不影响锻造与出图。
 
 ## 8. SPI 契约（`lib/spi.js`）
 

@@ -46,6 +46,8 @@
       <label class="num wide"><span>模型档案</span><select id="profile"></select></label>
     </div>
 
+    <p class="dict-note" id="dict-note" hidden></p>
+
     <div class="row">
       <button class="btn primary" id="btn-forge" type="button">锻造</button>
       <span class="hint" id="forge-status" role="status" aria-live="polite">就绪</span>
@@ -261,6 +263,13 @@
           <span class="hint" id="set-comfy-status" role="status" aria-live="polite">未探测</span>
         </div>
         <p class="tip" id="set-comfy-plan"></p>
+      </section>
+
+      <section class="set-block" aria-labelledby="set-dict-title">
+        <h3 id="set-dict-title">词库 · Tag 数据</h3>
+        <p class="dict-line" id="set-dict-status">读取中…</p>
+        <p class="tip" id="set-dict-source"></p>
+        <p class="warn" id="set-dict-note" hidden></p>
       </section>
     </div>
   </aside>

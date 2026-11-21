@@ -286,6 +286,29 @@ test('search：多词查询按命中词数优先，不被单个词的热度带�
 })
 
 
+test('词库版本：manifest.json 的 sfw 标记进统计（界面据此提示 NSFW）', async () => {
+  const fs = await import('node:fs/promises')
+  const row = (tag) => JSON.stringify({ tag, kind: 'general', postCount: 10 }) + '\n'
+
+  const sfwDir = path.join(scratch, 'dict-sfw')
+  await fs.mkdir(sfwDir, { recursive: true })
+  await fs.writeFile(path.join(sfwDir, 'general.jsonl'), row('zz_sfw_probe'), 'utf8')
+  await fs.writeFile(path.join(sfwDir, 'manifest.json'), JSON.stringify({ sfw: true, filteredAt: '2026-11-21T00:00:00.000Z' }), 'utf8')
+  const sfwIndex = createTagIndex({ dir: sfwDir, dataDirs: [sfwDir], probeDefaults: false, logger: silent })
+  await sfwIndex.ready()
+  assert.equal(sfwIndex.stats().sfw, true)
+  assert.equal(sfwIndex.stats().sfwKnown, true)
+
+  // 没有 manifest 的目录（自己导的完整快照）不许当成 SFW：界面按「含成人向词条」提示
+  const bareDir = path.join(scratch, 'dict-bare')
+  await fs.mkdir(bareDir, { recursive: true })
+  await fs.writeFile(path.join(bareDir, 'general.jsonl'), row('zz_bare_probe'), 'utf8')
+  const bareIndex = createTagIndex({ dir: bareDir, dataDirs: [bareDir], probeDefaults: false, logger: silent })
+  await bareIndex.ready()
+  assert.equal(bareIndex.stats().sfw, false)
+  assert.equal(bareIndex.stats().sfwKnown, false)
+})
+
 test('overlay：<dataDir>/tags 的用户词表能被查到（不依赖真实库）', async () => {
   const dir = path.join(scratch, 'overlay-user')
   const fs = await import('node:fs/promises')

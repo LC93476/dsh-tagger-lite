@@ -2,6 +2,52 @@
 
 import { $, state, textOf, el, clear, api, flash, paintComfyPill, paintLlmPill, applyState, saveConfig, dropQuotes, tidyPath, pathRoot, normalizeLlmBase, normalizeComfyBase, parseComfyInput } from './state.js'
 import { loadWorkflows } from './runner.js'
+/* ---------------- 词库提示（含 NSFW 说明） ---------------- */
+
+/**
+ * 把 /state 的 tags.index 归纳成一句状态 + 一句提示。纯函数，测试直接调用。
+ * 判定优先级：只读到 seed > 明确标了 sfw:true 的 SFW 快照 > 其余都按「完整词表，含成人向词条」提示。
+ * @param {any} index configView 里的 tags.index
+ */
+export function dictSummary(index) {
+  const info = index !== null && typeof index === 'object' ? index : {}
+  const loaded = Number.isFinite(info.loaded) ? Math.max(0, Math.trunc(info.loaded)) : 0
+  // 没有 index（服务没起/还没读）时按「只读到 seed」说，别把空白说成「含 NSFW」
+  const seedOnly = info.seedOnly !== false
+  const sfw = info.sfw === true
+  const count = loaded.toLocaleString('zh-CN')
+  const source = textOf(info.dataDir)
+  const line = seedOnly
+    ? count + ' 条 · 只读到内置 seed'
+    : sfw
+      ? count + ' 条 · SFW 词表（不含成人向词条）'
+      : count + ' 条 · 完整词表（含 NSFW 词条）'
+  const note = seedOnly
+    ? '内置 seed 只有常用词。把全量快照放进 data/danbooru/（node scripts/tags/import-dict.mjs），或在设置里配 tags.dataDirs。'
+    : sfw
+      ? ''
+      : '这份词库含成人向（NSFW）词条：本机自用没问题，要对外分享请换成 SFW 词表（node scripts/tags/filter-dict.mjs）。提示只写在设置里，不影响锻造。'
+  const badge = seedOnly || sfw ? '' : '词库含 NSFW 词条 · ' + count + ' 条'
+  return { line: line, note: note, badge: badge, source: source, sfw: sfw, seedOnly: seedOnly, loaded: loaded }
+}
+
+
+/** 把词库摘要刷到设置抽屉与提示词栏；没有对应节点就什么都不做。 */
+export function renderDictInfo() {
+  const sum = dictSummary(state.config !== null && typeof state.config === 'object' && state.config.tags !== undefined ? state.config.tags.index : null)
+  const status = $('set-dict-status')
+  if (status !== null) {
+    status.textContent = sum.line
+    status.classList.toggle('is-warn', sum.seedOnly === false && sum.sfw === false)
+  }
+  const src = $('set-dict-source')
+  if (src !== null) src.textContent = sum.source === '' ? '数据源：内置 data/tags' : '数据源：' + sum.source
+  const note = $('set-dict-note')
+  if (note !== null) { note.textContent = sum.note; note.hidden = sum.note === '' }
+  const badge = $('dict-note')
+  if (badge !== null) { badge.textContent = sum.badge; badge.hidden = sum.badge === '' }
+}
+
 /* ---------------- 接口设置：LLM 与 ComfyUI ---------------- */
 
 export const LLM_PRESETS = [
@@ -91,6 +137,7 @@ export function settingsOpen() {
 
 export function openSettings() {
   fillSettings(true)
+  renderDictInfo()
   const box = $('settings')
   if (box === null) return
   box.hidden = false
@@ -114,6 +161,7 @@ export async function refreshState() {
   // /state 里没有 llmReady（只有独立服务版 /health 才有），两边并发查一次再合并
   const [res, health] = await Promise.all([api('/state'), api('/health')])
   applyState(res)
+  renderDictInfo()
   const h = health.status === 0 ? {} : (health.data || {})
   if (typeof h.llmReady !== 'boolean') return
   // 服务端实际判定优先于从 /state 推断出来的结果

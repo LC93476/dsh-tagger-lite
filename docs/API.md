@@ -8,7 +8,7 @@
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
 | GET | `/health` | `{ plugin: 'dsh-tagger', version, dataDir, llmReady, llm: { provider, model, baseUrl } }`（独立版还多 `mode/host/port/basePath/mcp/refineModes/comfy`；`llmReady` 给工作台药丸用，未配 key 或地址时为 `false`） |
-| GET | `/state` | 面板启动一次性要的全部状态：`{ config, purge, comfy, workflows, workflowsError?, history }`（**没有 `ok` 字段**，出错看 `workflowsError` 与 `comfy.ok`） |
+| GET | `/state` | 面板启动一次性要的全部状态：`{ config, purge, comfy, workflows, workflowsError?, history }`（**没有 `ok` 字段**，出错看 `workflowsError` 与 `comfy.ok`）。`config.tags.index` 是词库统计 `{ loaded, seedOnly, dataDir, sfw, sfwKnown, … }`：`sfw` 只认快照 `manifest.json` 里显式的 `sfw: true`，设置抽屉据此提示「词库含 NSFW 词条」 |
 | GET/POST | `/config` | GET 读配置视图 → `{ ok: true, config }`（**配置包在 `config` 里，不是裸对象**）；POST `{ patch }` 写持久化覆盖并热应用 → `{ ok: true, config }`。改 `forge.profile` 即可切换模型档案（见下文「模型档案」） |
 | GET | `/profiles` | 模型档案清单与当前生效值：`{ profiles: [{ id, title, note, style, quality, qualityTags, order }], current: { id, title, note, style, quality, qualityTags, order, controlled } }`（`ok: true`；`controlled: true` 表示质量词与词序由档案接管，改配置无效） |
 | GET | `/styles` | 参考样式预设（`/studio` 中栏的卡片）：`?group=look&q=胶片`；`groups` 恒全量，`styles` 按分组 / 关键词筛。见下文「样式预设」 |

@@ -388,6 +388,57 @@ test('refreshState: /health 的 llmReady 为准重画 LLM 药丸', async functio
   assert.equal(pill.dataset.kind, 'warn', '配了 provider 却没有 key：警告，不许绿灯')
 })
 
+/* ---------------- 词库提示（含 NSFW） ---------------- */
+
+test('dictSummary: 完整词表 / SFW 快照 / 只有 seed 三种口径', function () {
+  const full = settingsMod.dictSummary({ loaded: 99447, seedOnly: false, sfw: false, sfwKnown: true, dataDir: 'D:/DSh tagger-lite/data/danbooru' })
+  assert.equal(full.line, '99,447 条 · 完整词表（含 NSFW 词条）')
+  assert.match(full.note, /NSFW/)
+  assert.match(full.badge, /NSFW/)
+  assert.equal(full.source, 'D:/DSh tagger-lite/data/danbooru')
+
+  const sfw = settingsMod.dictSummary({ loaded: 97497, seedOnly: false, sfw: true, sfwKnown: true, dataDir: '' })
+  assert.equal(sfw.line, '97,497 条 · SFW 词表（不含成人向词条）')
+  assert.equal(sfw.note, '')
+  assert.equal(sfw.badge, '', 'SFW 词表不该再挂 NSFW 角标')
+
+  const seed = settingsMod.dictSummary({ loaded: 1247, seedOnly: true, sfw: false, sfwKnown: false, dataDir: '' })
+  assert.equal(seed.line, '1,247 条 · 只读到内置 seed')
+  assert.match(seed.note, /import-dict/)
+  assert.equal(seed.badge, '')
+
+  const empty = settingsMod.dictSummary(null)
+  assert.equal(empty.line, '0 条 · 只读到内置 seed')
+  assert.equal(empty.source, '')
+})
+
+test('renderDictInfo: 完整词表时提示写在设置里、提示词栏挂角标；SFW 时两处都不留', function () {
+  resetRegistry()
+  const status = mk('p', 'set-dict-status')
+  mk('p', 'set-dict-source')
+  const note = mk('p', 'set-dict-note')
+  const badge = mk('p', 'dict-note')
+  const saved = state.config
+  try {
+    state.config = { tags: { index: { loaded: 99447, seedOnly: false, sfw: false, sfwKnown: true, dataDir: 'D:/DSh tagger-lite/data/danbooru' } } }
+    settingsMod.renderDictInfo()
+    assert.equal(status.textContent, '99,447 条 · 完整词表（含 NSFW 词条）')
+    assert.equal(status.classList.contains('is-warn'), true)
+    assert.equal(note.hidden, false)
+    assert.match(note.textContent, /filter-dict/)
+    assert.equal(badge.hidden, false)
+    assert.match(badge.textContent, /NSFW/)
+
+    state.config = { tags: { index: { loaded: 97497, seedOnly: false, sfw: true, sfwKnown: true, dataDir: '' } } }
+    settingsMod.renderDictInfo()
+    assert.equal(status.classList.contains('is-warn'), false)
+    assert.equal(note.hidden, true)
+    assert.equal(badge.hidden, true)
+  } finally {
+    state.config = saved
+  }
+})
+
 /* ---------------- 面板脚本与 html 的 id 一致性 ---------------- */
 
 test('studio.html 覆盖所有脚本引用的 id（单向）', function () {
